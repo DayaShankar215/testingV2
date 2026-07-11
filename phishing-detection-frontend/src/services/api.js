@@ -15,19 +15,17 @@ const api = axios.create({
 // --- Request Interceptor ---
 api.interceptors.request.use(
   (config) => {
+    // Add ngrok skip warning header
     config.headers["ngrok-skip-browser-warning"] = "true";
     
+    // Get token from localStorage (saved after login)
     const token = localStorage.getItem("accessToken");
-    console.log("🔑 Token present:", !!token);
-    console.log("📤 Method:", config.method.toUpperCase());
-    console.log("📤 URL:", config.url);
     
+    // If token exists, add it to Authorization header for ALL requests
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log("🔑 Authorization header set");
-    } else {
-      console.warn("⚠️ No token found");
     }
+    
     return config;
   },
   (error) => {
@@ -37,13 +35,8 @@ api.interceptors.request.use(
 
 // --- Response Interceptor ---
 api.interceptors.response.use(
-  (response) => {
-    console.log(`📥 Response: ${response.status} ${response.config.url}`);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error("❌ API Error:", error.response?.status, error.response?.data);
-    
     if (error.code === "ERR_NETWORK") {
       throw { 
         message: "Cannot connect to server. Please check your connection.",
@@ -168,20 +161,19 @@ export const getScanByReference = async (reference) => {
   }
 };
 
-// ========== DELETE SCAN ==========
+// DELETE SCAN 
 export const deleteScanByReference = async (reference) => {
   try {
-    console.log(`🗑️ DELETING: /scans/${reference}`);
-    const response = await api.delete(`/scans/${reference}`);
-    console.log("✅ Delete Success:", response.data);
+    const response = await api.delete(`/scans/${reference}`, {
+      headers: { "Accept": "*/*" },
+    });
     return response.data;
   } catch (error) {
-    console.error("❌ Delete Failed:", error);
-    throw error;
+    throw error.response?.data || { message: "Failed to delete scan" };
   }
 };
 
-// ==================== PDF REPORT DOWNLOAD ====================
+// PDF REPORT DOWNLOAD 
 
 export const downloadScanReport = async (reference) => {
   try {
@@ -207,7 +199,7 @@ export const downloadScanReport = async (reference) => {
   }
 };
 
-// ==================== DASHBOARD ENDPOINTS ====================
+// DASHBOARD ENDPOINTS 
 
 export const getDashboardStats = async () => {
   try {

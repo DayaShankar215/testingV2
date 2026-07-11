@@ -4,7 +4,6 @@ import {
   getScanHistory,
   getScanByReference,
   deleteScanByReference,
-  downloadScanReport,
 } from "../services/api";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import { formatDate, truncateText } from "../utils/formatters";
@@ -210,70 +209,81 @@ const History = () => {
     }
   };
 
-  // pages/History.jsx - Update handleDownloadReport function
-
-const handleDownloadReport = async (reference) => {
-  if (!isAuthenticated) {
-    setShowAuthModal(true);
-    return;
-  }
-
-  if (downloadingId === reference) return;
-
-  setDownloadingId(reference);
-  const toastId = toast.loading("Generating PDF report...");
-
-  try {
-    // Get the full scan details from API
-    const scanDetails = await getScanByReference(reference);
-    console.log("Scan Details:", scanDetails);
-    
-    // Prepare data for PDF - This matches the JSON structure you showed
-    const pdfData = {
-      reference: scanDetails.reference,
-      url: scanDetails.url,
-      prediction: scanDetails.prediction,
-      conclusion: scanDetails.conclusion,
-      scannedAt: scanDetails.scannedAt,
-      phishingReasons: scanDetails.phishingReasons || [],
-      legitimateReasons: scanDetails.legitimateReasons || [],
-    };
-    
-    // Import PDF generator and download
-    const { downloadPDF } = await import('../services/pdfGenerator');
-    downloadPDF(pdfData, 'url');
-    
-    toast.success("PDF report downloaded successfully!", { id: toastId });
-  } catch (error) {
-    console.error("Download Error:", error);
-    toast.error(error.message || "Failed to download report", { id: toastId });
-  } finally {
-    setDownloadingId(null);
-  }
-};
-
-  const handleDeleteScan = async (reference) => {
-    console.log("=== DELETE SCAN CLICKED ===");
-    console.log("Reference:", reference);
-    console.log("Is Authenticated:", isAuthenticated);
-
+  const handleViewDetails = async (reference) => {
     if (!isAuthenticated) {
-      console.log("❌ Not authenticated, showing auth modal");
       setShowAuthModal(true);
       return;
     }
 
-    if (deletingId === reference) {
-      console.log("⚠️ Already deleting this scan");
+    try {
+      const response = await getScanByReference(reference);
+      console.log("Scan Details Response:", response);
+      
+      setSelectedScan({
+        reference: response.reference,
+        url: response.url,
+        prediction: response.prediction,
+        legitimateReasons: response.legitimateReasons || [],
+        phishingReasons: response.phishingReasons || [],
+        conclusion: response.conclusion,
+        scannedAt: response.scannedAt,
+      });
+      setShowModal(true);
+    } catch (error) {
+      console.error("Error fetching scan details:", error);
+      toast.error("Failed to load scan details");
+    }
+  };
+
+  const handleDownloadReport = async (reference) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
       return;
     }
 
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this scan? This action cannot be undone."
-      )
-    ) {
-      console.log("❌ User cancelled deletion");
+    if (downloadingId === reference) return;
+
+    setDownloadingId(reference);
+    const toastId = toast.loading("Generating PDF report...");
+
+    try {
+      const scanDetails = await getScanByReference(reference);
+      console.log("Scan Details:", scanDetails);
+      
+      const pdfData = {
+        reference: scanDetails.reference,
+        url: scanDetails.url,
+        prediction: scanDetails.prediction,
+        conclusion: scanDetails.conclusion,
+        scannedAt: scanDetails.scannedAt,
+        phishingReasons: scanDetails.phishingReasons || [],
+        legitimateReasons: scanDetails.legitimateReasons || [],
+      };
+      
+      const { downloadPDF } = await import('../services/pdfGenerator');
+      downloadPDF(pdfData, 'url');
+      
+      toast.success("PDF report downloaded successfully!", { id: toastId });
+    } catch (error) {
+      console.error("Download Error:", error);
+      toast.error(error.message || "Failed to download report", { id: toastId });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  
+
+  // ========== DELETE SCAN - SIMPLIFIED ==========
+  const handleDeleteScan = async (reference) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    if (deletingId === reference) return;
+
+    if (!window.confirm("Are you sure you want to delete this scan? This action cannot be undone.")) {
       return;
     }
 
@@ -281,35 +291,21 @@ const handleDownloadReport = async (reference) => {
     const toastId = toast.loading("Deleting scan...");
 
     try {
-      console.log(`🗑️ Calling deleteScanByReference with: ${reference}`);
+      // This will now send the token properly
       const response = await deleteScanByReference(reference);
-      console.log("✅ Delete Response:", response);
-
-      toast.success(response?.message || "Scan deleted successfully!", {
-        id: toastId,
-      });
+      
+      toast.success(response?.message || "Scan deleted successfully!", { id: toastId });
 
       setScans((prev) => prev.filter((scan) => scan.reference !== reference));
       await fetchHistory();
     } catch (error) {
-      console.error("❌ Delete Error:", error);
-
+      console.error("Delete Error:", error);
+      
       if (error.status === 401) {
-        toast.error("Session expired. Please login again.", { id: toastId });
+        toast.error("Please login again to delete scans", { id: toastId });
         setTimeout(() => logout(), 1500);
-      } else if (error.status === 403) {
-        toast.error("You don't have permission to delete this scan.", {
-          id: toastId,
-        });
-      } else if (error.status === 404) {
-        toast.error("Scan not found. It may have been already deleted.", {
-          id: toastId,
-        });
-        setScans((prev) => prev.filter((scan) => scan.reference !== reference));
       } else {
-        toast.error(error.message || "Failed to delete scan. Please try again.", {
-          id: toastId,
-        });
+        toast.error(error.message || "Failed to delete scan", { id: toastId });
       }
     } finally {
       setDeletingId(null);
@@ -535,7 +531,7 @@ const handleDownloadReport = async (reference) => {
           )}
         </div>
 
-        {/* Stats Cards - Removed Avg Risk Score */}
+        {/* Stats Cards */}
         <div
           style={{
             display: "grid",
