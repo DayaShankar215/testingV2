@@ -1,6 +1,6 @@
 // pages/MessageScanner.jsx
 import React, { useState } from "react";
-import { scanMessage, submitFeedback, downloadPDFReport } from "../services/api";
+import { scanMessage, submitFeedback, getScanByReference } from "../services/api";
 import { validateMessage } from "../utils/validators";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
@@ -20,17 +20,15 @@ import {
   FaSpinner,
   FaCheck,
   FaTimes,
-  FaClock,
   FaUserSecret,
   FaLink,
   FaPhone,
   FaHashtag,
   FaQuoteRight,
-  FaShieldVirus,
-  FaRobot,
-  FaBrain,
-  FaChartBar,
   FaUserPlus,
+  FaExclamationCircle,
+  FaWifi,
+  FaFilePdf,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -42,6 +40,7 @@ const MessageScanner = () => {
   const [charCount, setCharCount] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
 
   const { isAuthenticated } = useAuth();
   const { addScan } = useGuest();
@@ -58,62 +57,6 @@ const MessageScanner = () => {
   const [submitting, setSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
-  const handleScan = async (e) => {
-    e.preventDefault();
-
-    const validation = validateMessage(message);
-    if (!validation.isValid) {
-      toast.error(validation.error);
-      setError(validation.error);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setShowFeedback(false);
-    setFeedbackSubmitted(false);
-
-    try {
-      const response = await scanMessage(message);
-      
-      // Transform API response to match expected format
-      const scanResult = {
-        id: response.reference || `scan_${Date.now()}`,
-        message: response.message || message,
-        classification: response.prediction || "UNKNOWN",
-        riskScore: getRiskScoreFromPrediction(response.prediction),
-        confidence: 0.85, // Default confidence if not provided
-        explanation: response.conclusion || "Analysis completed",
-        result: getResultFromPrediction(response.prediction),
-        features: extractMessageFeatures(message),
-        extractedUrls: extractUrlsFromMessage(message),
-        date: new Date().toISOString(),
-        reference: response.reference,
-      };
-
-      setResult(scanResult);
-      
-      // Store in guest history if not authenticated
-      if (!isAuthenticated) {
-        addScan({
-          ...scanResult,
-          type: "message",
-          content: message,
-        });
-      }
-      
-      setShowFeedback(true);
-      setFeedback((prev) => ({ ...prev, scanId: scanResult.id }));
-      toast.success("Message analysis completed!");
-    } catch (err) {
-      const errorMsg = err.message || "Failed to scan message";
-      setError(errorMsg);
-      toast.error(errorMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const getRiskScoreFromPrediction = (prediction) => {
     switch (prediction?.toUpperCase()) {
       case "PHISHING":
@@ -126,44 +69,73 @@ const MessageScanner = () => {
         return 55;
       case "SAFE":
       case "LEGITIMATE":
-      default:
         return 15;
+      default:
+        return 50;
     }
   };
 
-  const getResultFromPrediction = (prediction) => {
-    switch (prediction?.toUpperCase()) {
+  const processScanResponse = (response, scannedMessage) => {
+    const prediction = response.prediction?.toUpperCase() || "UNKNOWN";
+    let riskScore = 50;
+    let resultType = "unknown";
+
+    switch (prediction) {
       case "PHISHING":
       case "DANGEROUS":
       case "MALICIOUS":
       case "SCAM":
-        return "scam";
+        riskScore = 85;
+        resultType = "scam";
+        break;
       case "SUSPICIOUS":
       case "WARNING":
-        return "suspicious";
+        riskScore = 55;
+        resultType = "suspicious";
+        break;
       case "SAFE":
       case "LEGITIMATE":
+        riskScore = 15;
+        resultType = "safe";
+        break;
       default:
-        return "safe";
+        riskScore = 50;
+        resultType = "unknown";
     }
+
+    const features = extractMessageFeatures(scannedMessage);
+    const extractedUrls = extractUrlsFromMessage(scannedMessage);
+
+    return {
+      reference: response.reference,
+      message: response.message || scannedMessage,
+      prediction: response.prediction,
+      classification: response.prediction || "UNKNOWN",
+      riskScore: riskScore,
+      confidence: 0.85,
+      explanation: response.conclusion || "Analysis completed",
+      result: resultType,
+      features: features,
+      extractedUrls: extractedUrls,
+      scannedAt: response.scannedAt || new Date().toISOString(),
+    };
   };
 
   const extractMessageFeatures = (text) => {
     const hasURL = /https?:\/\/[^\s]+/.test(text);
     const hasPhone = /\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{1,4}[\s\-]?\d{1,9}/.test(text);
     const suspiciousKeywords = [
-      'urgent', 'immediate', 'verify', 'confirm', 'account', 'password',
-      'bank', 'paypal', 'credit card', 'ssn', 'social security',
-      'win', 'prize', 'free', 'offer', 'limited time',
-      'click here', 'verify now', 'update your', 'security alert'
+      "urgent", "immediate", "verify", "confirm", "account", "password",
+      "bank", "paypal", "credit card", "ssn", "social security",
+      "win", "prize", "free", "offer", "limited time",
+      "click here", "verify now", "update your", "security alert"
     ];
-    const matches = suspiciousKeywords.filter(keyword => 
+    const matches = suspiciousKeywords.filter((keyword) =>
       text.toLowerCase().includes(keyword.toLowerCase())
     );
     const specialCharCount = (text.match(/[^a-zA-Z0-9\s]/g) || []).length;
-    const uppercaseRatio = text.length > 0 
-      ? (text.match(/[A-Z]/g) || []).length / text.length 
-      : 0;
+    const uppercaseRatio =
+      text.length > 0 ? (text.match(/[A-Z]/g) || []).length / text.length : 0;
 
     return {
       length: text.length,
@@ -181,50 +153,97 @@ const MessageScanner = () => {
     return text.match(urlRegex) || [];
   };
 
-  const handleDownloadPDF = async () => {
+  const handleScan = async (e) => {
+    e.preventDefault();
+
+    const validation = validateMessage(message);
+    if (!validation.isValid) {
+      toast.error(validation.error);
+      setError(validation.error);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setConnectionError(false);
+    setShowFeedback(false);
+    setFeedbackSubmitted(false);
+
+    try {
+      const response = await scanMessage(message);
+      console.log("API Response:", response);
+
+      const scanResult = processScanResponse(response, message);
+      setResult(scanResult);
+
+      if (!isAuthenticated) {
+        addScan({
+          ...scanResult,
+          type: "message",
+          content: message,
+        });
+      }
+
+      setShowFeedback(true);
+      setFeedback((prev) => ({ ...prev, scanId: response.reference }));
+      toast.success("Message analysis completed!");
+    } catch (err) {
+      console.error("Scan Error:", err);
+      
+      if (err.isCorsError || err.message?.includes("CORS") || err.message?.includes("Network")) {
+        setConnectionError(true);
+        setError("Cannot connect to the server. Please check your connection.");
+        toast.error("Connection Error");
+      } else {
+        const errorMsg = err.message || "Failed to scan message";
+        setError(errorMsg);
+        toast.error(errorMsg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadReport = async () => {
     if (!result || downloading) return;
-    
+
     if (!isAuthenticated) {
       setShowAuthModal(true);
       return;
     }
-    
-    const scanId = result.id || result.reference;
-    if (!scanId) {
-      toast.error("Scan ID not found");
+
+    const reference = result.reference;
+    if (!reference) {
+      toast.error("Scan reference not found");
       return;
     }
 
     setDownloading(true);
     try {
-      const response = await downloadPDFReport(scanId, "message");
+      // Fetch scan details for PDF generation
+      const scanDetails = await getScanByReference(reference);
+      console.log("Scan Details for PDF:", scanDetails);
       
-      if (!response || !response.data) {
-        throw new Error("No data received from server");
-      }
-
-      const blob = new Blob([response.data], { 
-        type: response.headers?.['content-type'] || 'application/pdf' 
-      });
+      // Format the data for PDF generation
+      const pdfData = {
+        reference: scanDetails.reference,
+        message: scanDetails.message || result.message,
+        prediction: scanDetails.prediction,
+        riskScore: result.riskScore || getRiskScoreFromPrediction(scanDetails.prediction),
+        conclusion: scanDetails.conclusion,
+        scannedAt: scanDetails.scannedAt,
+        phishingReasons: scanDetails.phishingReasons || [],
+        legitimateReasons: scanDetails.legitimateReasons || [],
+      };
       
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `security_report_${scanId}.pdf`;
-      link.style.display = 'none';
+      // Generate PDF using our custom generator
+      const { downloadPDF } = await import('../services/pdfGenerator');
+      downloadPDF(pdfData, 'message');
       
-      document.body.appendChild(link);
-      link.click();
-      
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
-      }, 100);
-      
-      toast.success("PDF report downloaded successfully!");
+      toast.success("Report downloaded successfully!");
     } catch (error) {
-      console.error("PDF Download Error:", error);
-      toast.error(error.message || "Failed to download PDF report");
+      console.error("Download Error:", error);
+      toast.error(error.message || "Failed to download report");
     } finally {
       setDownloading(false);
     }
@@ -261,7 +280,7 @@ const MessageScanner = () => {
         feedback.type,
         feedback.isAccurate,
         feedback.comments,
-        feedback.rating,
+        feedback.rating
       );
       setFeedbackSubmitted(true);
       toast.success("Thank you for your feedback! 🎉");
@@ -303,29 +322,31 @@ const MessageScanner = () => {
   };
 
   const getRiskLevel = (score) => {
-    if (score > 70) return { 
-      label: "High Risk", 
-      color: "#ef4444", 
-      bg: "#fee2e2", 
-      border: "#fca5a5",
-      icon: "🚨",
-      badge: "Dangerous"
-    };
-    if (score > 30) return { 
-      label: "Medium Risk", 
-      color: "#f59e0b", 
-      bg: "#fef3c7", 
-      border: "#fcd34d",
-      icon: "⚠️",
-      badge: "Suspicious"
-    };
-    return { 
-      label: "Low Risk", 
-      color: "#10b981", 
-      bg: "#d1fae5", 
+    if (score > 70)
+      return {
+        label: "High Risk",
+        color: "#ef4444",
+        bg: "#fee2e2",
+        border: "#fca5a5",
+        icon: "🚨",
+        badge: "Scam",
+      };
+    if (score > 30)
+      return {
+        label: "Medium Risk",
+        color: "#f59e0b",
+        bg: "#fef3c7",
+        border: "#fcd34d",
+        icon: "⚠️",
+        badge: "Suspicious",
+      };
+    return {
+      label: "Low Risk",
+      color: "#10b981",
+      bg: "#d1fae5",
       border: "#6ee7b7",
       icon: "✅",
-      badge: "Safe"
+      badge: "Safe",
     };
   };
 
@@ -383,15 +404,17 @@ const MessageScanner = () => {
           AI-powered scam detection for SMS, WhatsApp, and instant messages
         </p>
         {!isAuthenticated && (
-          <p style={{ 
-            fontSize: "14px", 
-            color: "#94a3b8", 
-            marginTop: "8px",
-            background: "#f1f5f9",
-            padding: "6px 16px",
-            borderRadius: "100px",
-            display: "inline-block",
-          }}>
+          <p
+            style={{
+              fontSize: "14px",
+              color: "#94a3b8",
+              marginTop: "8px",
+              background: "#f1f5f9",
+              padding: "6px 16px",
+              borderRadius: "100px",
+              display: "inline-block",
+            }}
+          >
             👋 Guest mode • Sign up to save your scan history
           </p>
         )}
@@ -514,8 +537,54 @@ const MessageScanner = () => {
         </form>
       </div>
 
-      {/* Error Display */}
-      {error && (
+      {/* Connection Error Display */}
+      {connectionError && (
+        <div
+          style={{
+            background: "#fef2f2",
+            border: "2px solid #fca5a5",
+            borderRadius: "16px",
+            padding: "24px",
+            marginBottom: "24px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "16px" }}>
+            <FaExclamationCircle style={{ color: "#dc2626", fontSize: "32px", flexShrink: 0, marginTop: "4px" }} />
+            <div style={{ flex: 1 }}>
+              <h3 style={{ color: "#dc2626", margin: "0 0 8px", fontSize: "18px" }}>
+                ⚠️ Connection Error
+              </h3>
+              <p style={{ color: "#475569", margin: "0 0 12px", lineHeight: "1.6" }}>
+                {error || "Cannot connect to the server. Please check your connection."}
+              </p>
+              <button
+                onClick={() => {
+                  setConnectionError(false);
+                  setError(null);
+                }}
+                style={{
+                  padding: "10px 24px",
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "12px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <FaWifi />
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regular Error Display */}
+      {error && !connectionError && (
         <div
           style={{
             background: "#fee",
@@ -528,9 +597,7 @@ const MessageScanner = () => {
             gap: "12px",
           }}
         >
-          <FaExclamationTriangle
-            style={{ color: "#ef4444", fontSize: "20px" }}
-          />
+          <FaExclamationTriangle style={{ color: "#ef4444", fontSize: "20px" }} />
           <p style={{ color: "#dc2626", margin: 0 }}>{error}</p>
         </div>
       )}
@@ -563,7 +630,7 @@ const MessageScanner = () => {
                 transform: "translate(100px, -100px)",
               }}
             />
-            
+
             <div
               style={{
                 display: "flex",
@@ -652,7 +719,7 @@ const MessageScanner = () => {
 
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                 <button
-                  onClick={handleDownloadPDF}
+                  onClick={handleDownloadReport}
                   disabled={downloading}
                   style={{
                     background: riskLevel.color,
@@ -695,7 +762,7 @@ const MessageScanner = () => {
                     </>
                   ) : (
                     <>
-                      <FaDownload />
+                      <FaFilePdf />
                       <span>Download Report</span>
                     </>
                   )}
@@ -752,8 +819,8 @@ const MessageScanner = () => {
               {result.riskScore > 70
                 ? "🚨 HIGH RISK: This is likely a scam! Do not respond or click any links."
                 : result.riskScore > 30
-                  ? "⚠️ MEDIUM RISK: This message shows scam indicators. Exercise caution."
-                  : "✅ LOW RISK: This message appears legitimate."}
+                ? "⚠️ MEDIUM RISK: This message shows scam indicators. Exercise caution."
+                : "✅ LOW RISK: This message appears legitimate."}
             </p>
           </div>
 
@@ -869,7 +936,7 @@ const MessageScanner = () => {
                     fontSize: "20px",
                   }}
                 >
-                  <FaRobot />
+                  🤖
                 </div>
                 <div>
                   <h3
@@ -910,7 +977,7 @@ const MessageScanner = () => {
                     margin: 0,
                   }}
                 >
-                  {result.classification}
+                  {result.prediction || result.classification}
                 </p>
               </div>
               <div
@@ -934,7 +1001,7 @@ const MessageScanner = () => {
                     color: riskLevel.color,
                   }}
                 >
-                  <FaBrain size={14} />
+                  <FaCheckCircle size={14} />
                   Confidence: {((result.confidence || 0.85) * 100).toFixed(1)}%
                 </div>
                 {result.reference && (
@@ -1210,7 +1277,9 @@ const MessageScanner = () => {
                     padding: "14px 18px",
                     background: result.features.hasURL ? "#fef2f2" : "#ecfdf5",
                     borderRadius: "12px",
-                    border: `1px solid ${result.features.hasURL ? "#fca5a5" : "#6ee7b7"}`,
+                    border: `1px solid ${
+                      result.features.hasURL ? "#fca5a5" : "#6ee7b7"
+                    }`,
                   }}
                 >
                   <div
@@ -1272,7 +1341,9 @@ const MessageScanner = () => {
                     padding: "14px 18px",
                     background: result.features.hasPhone ? "#fef2f2" : "#ecfdf5",
                     borderRadius: "12px",
-                    border: `1px solid ${result.features.hasPhone ? "#fca5a5" : "#6ee7b7"}`,
+                    border: `1px solid ${
+                      result.features.hasPhone ? "#fca5a5" : "#6ee7b7"
+                    }`,
                   }}
                 >
                   <div
@@ -1332,21 +1403,34 @@ const MessageScanner = () => {
                     alignItems: "center",
                     gap: "14px",
                     padding: "14px 18px",
-                    background: (result.features.suspiciousKeywordCount || 0) > 0 ? "#fef2f2" : "#ecfdf5",
+                    background:
+                      (result.features.suspiciousKeywordCount || 0) > 0
+                        ? "#fef2f2"
+                        : "#ecfdf5",
                     borderRadius: "12px",
-                    border: `1px solid ${(result.features.suspiciousKeywordCount || 0) > 0 ? "#fca5a5" : "#6ee7b7"}`,
+                    border: `1px solid ${
+                      (result.features.suspiciousKeywordCount || 0) > 0
+                        ? "#fca5a5"
+                        : "#6ee7b7"
+                    }`,
                   }}
                 >
                   <div
                     style={{
                       width: "36px",
                       height: "36px",
-                      background: (result.features.suspiciousKeywordCount || 0) > 0 ? "#fee2e2" : "#d1fae5",
+                      background:
+                        (result.features.suspiciousKeywordCount || 0) > 0
+                          ? "#fee2e2"
+                          : "#d1fae5",
                       borderRadius: "10px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      color: (result.features.suspiciousKeywordCount || 0) > 0 ? "#ef4444" : "#10b981",
+                      color:
+                        (result.features.suspiciousKeywordCount || 0) > 0
+                          ? "#ef4444"
+                          : "#10b981",
                       fontSize: "16px",
                     }}
                   >
@@ -1368,7 +1452,10 @@ const MessageScanner = () => {
                       style={{
                         fontSize: "18px",
                         fontWeight: "700",
-                        color: (result.features.suspiciousKeywordCount || 0) > 0 ? "#ef4444" : "#10b981",
+                        color:
+                          (result.features.suspiciousKeywordCount || 0) > 0
+                            ? "#ef4444"
+                            : "#10b981",
                         display: "flex",
                         alignItems: "center",
                         gap: "6px",
@@ -1376,7 +1463,8 @@ const MessageScanner = () => {
                     >
                       {(result.features.suspiciousKeywordCount || 0) > 0 ? (
                         <>
-                          <FaExclamationTriangle size={14} /> {result.features.suspiciousKeywordCount} found
+                          <FaExclamationTriangle size={14} />{" "}
+                          {result.features.suspiciousKeywordCount} found
                         </>
                       ) : (
                         <>
@@ -1493,7 +1581,9 @@ const MessageScanner = () => {
                       margin: 0,
                     }}
                   >
-                    {result.extractedUrls.length} suspicious link{result.extractedUrls.length > 1 ? 's' : ''} found in message
+                    {result.extractedUrls.length} suspicious link
+                    {result.extractedUrls.length > 1 ? "s" : ""} found in
+                    message
                   </p>
                 </div>
               </div>
@@ -1529,7 +1619,8 @@ const MessageScanner = () => {
                 }}
               >
                 <FaExclamationTriangle size={14} />
-                These URLs have been automatically analyzed and contributed to the risk score.
+                These URLs have been automatically analyzed and contributed to
+                the risk score.
               </p>
             </div>
           )}
@@ -1600,8 +1691,8 @@ const MessageScanner = () => {
               {result.riskScore > 70
                 ? "🚫 DO NOT engage with this message. Block the sender immediately. Never click links, reply, or call any numbers provided. Report this as spam to your carrier."
                 : result.riskScore > 30
-                  ? "⚠️ Be cautious. Do not share personal information, click suspicious links, or call unknown numbers. Verify the sender through official channels."
-                  : "✓ This message appears safe. However, always verify unexpected requests, especially those asking for personal information or money transfers."}
+                ? "⚠️ Be cautious. Do not share personal information, click suspicious links, or call unknown numbers. Verify the sender through official channels."
+                : "✓ This message appears safe. However, always verify unexpected requests, especially those asking for personal information or money transfers."}
             </p>
           </div>
 
@@ -1617,7 +1708,6 @@ const MessageScanner = () => {
                 border: "1px solid #e2e8f0",
               }}
             >
-              {/* ... feedback form (same as URLScanner) ... */}
               <div style={{ textAlign: "center", marginBottom: "24px" }}>
                 <div
                   style={{
@@ -1788,12 +1878,12 @@ const MessageScanner = () => {
                         {feedback.rating === 5
                           ? "🌟 Excellent!"
                           : feedback.rating === 4
-                            ? "😊 Good"
-                            : feedback.rating === 3
-                              ? "😐 Average"
-                              : feedback.rating === 2
-                                ? "😕 Poor"
-                                : "😞 Very Poor"}
+                          ? "😊 Good"
+                          : feedback.rating === 3
+                          ? "😐 Average"
+                          : feedback.rating === 2
+                          ? "😕 Poor"
+                          : "😞 Very Poor"}
                       </span>
                     )}
                   </div>
@@ -1931,7 +2021,7 @@ const MessageScanner = () => {
         initialMode="register"
         onSuccess={() => {
           setShowAuthModal(false);
-          toast.success("Welcome! You can now download PDF reports.");
+          toast.success("Welcome! You can now download reports.");
         }}
       />
 
@@ -1946,12 +2036,16 @@ const MessageScanner = () => {
             transform: translateY(0);
           }
         }
-        
+
         @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
         }
-        
+
         .spinning {
           animation: spin 1s linear infinite;
         }

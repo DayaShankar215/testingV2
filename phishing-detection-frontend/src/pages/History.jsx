@@ -2,10 +2,8 @@
 import React, { useState, useEffect } from "react";
 import {
   getScanHistory,
-  getScanById,
-  downloadPDFReport,
-  clearScanHistory,
-  deleteScanById,
+  getScanByReference,
+  deleteScanByReference,
 } from "../services/api";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import { formatDate, truncateText } from "../utils/formatters";
@@ -30,6 +28,7 @@ import {
   FaHashtag,
   FaUserPlus,
   FaInfoCircle,
+  FaFilePdf,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -76,22 +75,33 @@ const History = () => {
       setLoading(true);
       
       if (isAuthenticated) {
-        // Fetch from API for authenticated users
-        const response = await getScanHistory(filter === "all" ? null : filter);
-
+        const response = await getScanHistory();
+        console.log("Scan History Response:", response);
+        
         let scansData = [];
-        if (response) {
-          if (response.response && Array.isArray(response.response)) {
-            scansData = response.response;
-          } else if (Array.isArray(response)) {
-            scansData = response;
-          } else if (response.data && Array.isArray(response.data)) {
-            scansData = response.data;
-          } else if (response.scans && Array.isArray(response.scans)) {
-            scansData = response.scans;
-          }
+        if (response && response.scans && Array.isArray(response.scans)) {
+          scansData = response.scans;
+        } else if (Array.isArray(response)) {
+          scansData = response;
+        } else if (response && response.response && Array.isArray(response.response)) {
+          scansData = response.response;
         }
-        setScans(scansData);
+        
+        // Transform API response to frontend format
+        const formattedScans = scansData.map(scan => ({
+          reference: scan.reference,
+          url: scan.url,
+          prediction: scan.prediction,
+          conclusion: scan.conclusion,
+          scannedAt: scan.scannedAt,
+          type: "url",
+          riskScore: getRiskScoreFromPrediction(scan.prediction),
+          result: getResultFromPrediction(scan.prediction),
+          content: scan.url,
+          _raw: scan,
+        }));
+        
+        setScans(formattedScans);
       } else {
         // Use guest scans
         const guestFiltered = filter === "all" 
@@ -100,12 +110,47 @@ const History = () => {
         setScans(guestFiltered);
       }
     } catch (error) {
+      console.error("Error fetching history:", error);
       if (isAuthenticated) {
         toast.error("Failed to load scan history");
       }
       setScans([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getRiskScoreFromPrediction = (prediction) => {
+    switch (prediction?.toUpperCase()) {
+      case "PHISHING":
+      case "DANGEROUS":
+      case "MALICIOUS":
+        return 85;
+      case "SUSPICIOUS":
+      case "WARNING":
+        return 55;
+      case "SAFE":
+      case "LEGITIMATE":
+        return 15;
+      default:
+        return 50;
+    }
+  };
+
+  const getResultFromPrediction = (prediction) => {
+    switch (prediction?.toUpperCase()) {
+      case "PHISHING":
+      case "DANGEROUS":
+      case "MALICIOUS":
+        return "phishing";
+      case "SUSPICIOUS":
+      case "WARNING":
+        return "suspicious";
+      case "SAFE":
+      case "LEGITIMATE":
+        return "safe";
+      default:
+        return "unknown";
     }
   };
 
@@ -118,9 +163,6 @@ const History = () => {
     setStats({ total, url, message, avgRisk });
   };
 
-  // ============================================
-  // DATE FILTER FUNCTIONS
-  // ============================================
   const getDateFilteredScans = (scansList) => {
     if (!scansList || !Array.isArray(scansList)) return [];
 
@@ -134,7 +176,7 @@ const History = () => {
     monthAgo.setDate(monthAgo.getDate() - 30);
 
     return scansList.filter((scan) => {
-      const scanDate = new Date(scan?.date || scan?.timestamp || scan?.createdAt);
+      const scanDate = new Date(scan?.scannedAt || scan?.date || scan?.timestamp || scan?.createdAt);
 
       switch (dateFilter.preset) {
         case "today":
@@ -174,11 +216,7 @@ const History = () => {
     if (tempStartDate && tempEndDate) {
       setDateFilter({ preset: "custom" });
       setShowDatePicker(false);
-      toast.success(
-        `Date filter applied: ${formatDateForDisplay(tempStartDate)} - ${formatDateForDisplay(
-          tempEndDate
-        )}`
-      );
+      toast.success(`Date filter applied`);
     } else {
       toast.error("Please select both start and end dates");
     }
@@ -205,7 +243,7 @@ const History = () => {
         return "Last 30 Days";
       case "custom":
         if (tempStartDate && tempEndDate) {
-          return `${formatDateForDisplay(tempStartDate)} - ${formatDateForDisplay(tempEndDate)}`;
+          return "Custom Range";
         }
         return "Custom Range";
       default:
@@ -213,141 +251,89 @@ const History = () => {
     }
   };
 
-  const formatDateForDisplay = (dateString) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  // ============================================
-  // SMART SEARCH
-  // ============================================
-  const smartSearch = (scan, term) => {
-    if (!term || term.trim() === "") return true;
-
-    const searchLower = term.toLowerCase().trim();
-    const scanId = (scan?.id || scan?._id || "").toString().toLowerCase();
-    const content = (scan?.content || scan?.message || "").toLowerCase();
-
-    const isNumeric = /^\d+$/.test(searchLower);
-
-    if (isNumeric) {
-      if (scanId.includes(searchLower)) {
-        return true;
-      }
-      const contentWords = content.split(/[\s\-_.,;:!?(){}[\]<>/\\|]+/);
-      if (contentWords.some(word => word === searchLower)) {
-        return true;
-      }
-      if (content.includes(`#${searchLower}`) || 
-          content.includes(`id: ${searchLower}`) ||
-          content.includes(`id:${searchLower}`)) {
-        return true;
-      }
-      return false;
-    }
-
-    return scanId.includes(searchLower) || content.includes(searchLower);
-  };
-
-  // ============================================
-  // ACTION HANDLERS
-  // ============================================
-  const handleViewDetails = async (id, type) => {
+  const handleViewDetails = async (reference) => {
     if (!isAuthenticated) {
       setShowAuthModal(true);
       return;
     }
 
     try {
-      const response = await getScanById(id, type);
-      let scanData = response;
-      if (
-        response?.response &&
-        Array.isArray(response.response) &&
-        response.response.length > 0
-      ) {
-        scanData = response.response[0];
-      } else if (response?.data) {
-        scanData = response.data;
-      }
-      setSelectedScan(scanData);
+      const response = await getScanByReference(reference);
+      console.log("Scan Details Response:", response);
+      
+      setSelectedScan({
+        reference: response.reference,
+        url: response.url,
+        prediction: response.prediction,
+        legitimateReasons: response.legitimateReasons || [],
+        phishingReasons: response.phishingReasons || [],
+        conclusion: response.conclusion,
+        scannedAt: response.scannedAt,
+        riskScore: getRiskScoreFromPrediction(response.prediction),
+        result: getResultFromPrediction(response.prediction),
+      });
       setShowModal(true);
     } catch (error) {
+      console.error("Error fetching scan details:", error);
       toast.error("Failed to load scan details");
     }
   };
 
-  const handleDownloadPDF = async (id, type) => {
+  const handleDownloadReport = async (reference) => {
     if (!isAuthenticated) {
       setShowAuthModal(true);
       return;
     }
 
-    if (downloadingId === id) return;
+    if (downloadingId === reference) return;
 
-    setDownloadingId(id);
+    setDownloadingId(reference);
     try {
-      const response = await downloadPDFReport(id, type);
-
-      if (!response || !response.data) {
-        throw new Error("No data received from server");
-      }
-
-      const blob = new Blob([response.data], {
-        type: response.headers?.["content-type"] || "application/pdf",
-      });
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `security_report_${id}.pdf`;
-      link.style.display = "none";
-
-      document.body.appendChild(link);
-      link.click();
-
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-
-      toast.success("PDF report downloaded successfully!");
+      // Fetch scan details for PDF generation
+      const scanDetails = await getScanByReference(reference);
+      console.log("Scan Details for PDF:", scanDetails);
+      
+      // Format the data for PDF generation
+      const pdfData = {
+        reference: scanDetails.reference,
+        url: scanDetails.url,
+        prediction: scanDetails.prediction,
+        riskScore: getRiskScoreFromPrediction(scanDetails.prediction),
+        conclusion: scanDetails.conclusion,
+        scannedAt: scanDetails.scannedAt,
+        phishingReasons: scanDetails.phishingReasons || [],
+        legitimateReasons: scanDetails.legitimateReasons || [],
+      };
+      
+      // Generate PDF using our custom generator
+      const { downloadPDF } = await import('../services/pdfGenerator');
+      downloadPDF(pdfData, 'url');
+      
+      toast.success("Report downloaded successfully!");
     } catch (error) {
-      console.error("PDF Download Error:", error);
-      toast.error(error.message || "Failed to download PDF report");
+      console.error("Download Error:", error);
+      toast.error(error.message || "Failed to download report");
     } finally {
       setDownloadingId(null);
     }
   };
 
-  const handleDeleteScan = async (id, type) => {
+  const handleDeleteScan = async (reference) => {
     if (!isAuthenticated) {
       setShowAuthModal(true);
       return;
     }
 
-    if (deletingId === id) return;
+    if (deletingId === reference) return;
 
-    if (
-      !window.confirm(
-        `Are you sure you want to delete this ${type} scan? This action cannot be undone.`
-      )
-    ) {
+    if (!window.confirm("Are you sure you want to delete this scan? This action cannot be undone.")) {
       return;
     }
 
-    setDeletingId(id);
+    setDeletingId(reference);
     try {
-      const result = await deleteScanById(id, type);
-      if (result && result.success === false) {
-        throw new Error(result.error || result.message || "Failed to delete scan");
-      }
-      toast.success(result?.message || "Scan deleted successfully!");
+      await deleteScanByReference(reference);
+      toast.success("Scan deleted successfully!");
       await fetchHistory();
     } catch (error) {
       console.error("Delete Error:", error);
@@ -357,9 +343,6 @@ const History = () => {
     }
   };
 
-  // ============================================
-  // CLEAR ALL HISTORY
-  // ============================================
   const handleClearAllHistory = async () => {
     if (scans.length === 0) {
       toast.error("No history to clear");
@@ -368,7 +351,6 @@ const History = () => {
     }
 
     if (!isAuthenticated) {
-      // Clear guest history
       clearGuestScans();
       toast.success("Guest history cleared successfully!");
       setShowClearConfirm(false);
@@ -378,12 +360,16 @@ const History = () => {
 
     setClearingAll(true);
     try {
-      const result = await clearScanHistory();
-      toast.success(result?.message || "All scan history cleared successfully!");
+      for (const scan of scans) {
+        if (scan.reference) {
+          await deleteScanByReference(scan.reference);
+        }
+      }
+      toast.success("All scan history cleared successfully!");
       setShowClearConfirm(false);
       await fetchHistory();
     } catch (error) {
-      console.error("❌ Clear History Error:", error);
+      console.error("Clear History Error:", error);
       toast.error(error.message || "Failed to clear history");
       setShowClearConfirm(false);
     } finally {
@@ -391,13 +377,24 @@ const History = () => {
     }
   };
 
-  // ============================================
-  // FILTERED SCANS
-  // ============================================
+  const smartSearch = (scan, term) => {
+    if (!term || term.trim() === "") return true;
+
+    const searchLower = term.toLowerCase().trim();
+    const reference = (scan?.reference || "").toString().toLowerCase();
+    const content = (scan?.content || scan?.url || scan?.message || "").toLowerCase();
+
+    return reference.includes(searchLower) || content.includes(searchLower);
+  };
+
   const filteredScans = (() => {
     if (!Array.isArray(scans)) return [];
 
     let filtered = getDateFilteredScans(scans);
+
+    if (filter !== "all") {
+      filtered = filtered.filter(s => s.type === filter);
+    }
 
     if (searchTerm.trim()) {
       filtered = filtered.filter((scan) => smartSearch(scan, searchTerm));
@@ -410,7 +407,7 @@ const History = () => {
     return <LoadingSpinner text="Loading security history..." />;
   }
 
-  // Guest mode empty state with sign up prompt
+  // Guest mode empty state
   if (!isAuthenticated && scans.length === 0) {
     return (
       <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "40px 24px" }}>
@@ -480,14 +477,6 @@ const History = () => {
                 transition: "all 0.3s ease",
                 boxShadow: "0 4px 15px rgba(102,126,234,0.4)",
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 8px 25px rgba(102,126,234,0.5)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 4px 15px rgba(102,126,234,0.4)";
-              }}
             >
               Start Scanning
             </button>
@@ -503,14 +492,6 @@ const History = () => {
                 fontWeight: "600",
                 cursor: "pointer",
                 transition: "all 0.3s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f8fafc";
-                e.currentTarget.style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "white";
-                e.currentTarget.style.transform = "translateY(0)";
               }}
             >
               <FaUserPlus style={{ marginRight: "8px" }} />
@@ -554,7 +535,6 @@ const History = () => {
             Track and analyze all your security scans
           </p>
 
-          {/* Guest Mode Indicator */}
           {!isAuthenticated && scans.length > 0 && (
             <div
               style={{
@@ -585,16 +565,13 @@ const History = () => {
                   cursor: "pointer",
                   transition: "all 0.3s ease",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
               >
                 Sign Up to Save
               </button>
             </div>
           )}
 
-          {/* Clear All Button */}
-          {scans.length > 0 && (
+          {scans.length > 0 && isAuthenticated && (
             <button
               onClick={() => setShowClearConfirm(true)}
               style={{
@@ -708,7 +685,6 @@ const History = () => {
           alignItems: "center",
         }}
       >
-        {/* Type Filters */}
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
           {["all", "url", "message"].map((type) => (
             <button
@@ -730,7 +706,6 @@ const History = () => {
           ))}
         </div>
 
-        {/* Date Filter */}
         <button
           onClick={() => setShowDatePicker(!showDatePicker)}
           style={{
@@ -770,7 +745,6 @@ const History = () => {
           )}
         </button>
 
-        {/* Search */}
         <div style={{ position: "relative", flex: "1", minWidth: "200px" }}>
           <FaSearch
             style={{
@@ -783,7 +757,7 @@ const History = () => {
           />
           <input
             type="text"
-            placeholder="Search by ID (e.g., 5) or content..."
+            placeholder="Search by reference ID or content..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -817,7 +791,6 @@ const History = () => {
             border: "1px solid #e2e8f0",
           }}
         >
-          {/* ... date picker content (same as before) ... */}
           <div
             style={{
               display: "flex",
@@ -916,12 +889,6 @@ const History = () => {
                     outline: "none",
                     transition: "border-color 0.3s",
                   }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "#667eea";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "#e2e8f0";
-                  }}
                 />
               </div>
               <div style={{ flex: "1", minWidth: "150px" }}>
@@ -949,12 +916,6 @@ const History = () => {
                     outline: "none",
                     transition: "border-color 0.3s",
                   }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "#667eea";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "#e2e8f0";
-                  }}
                 />
               </div>
               <button
@@ -968,12 +929,6 @@ const History = () => {
                   cursor: "pointer",
                   fontWeight: "600",
                   transition: "all 0.3s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "scale(1.02)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "scale(1)";
                 }}
               >
                 Apply Range
@@ -1056,64 +1011,22 @@ const History = () => {
                   borderBottom: "1px solid #e2e8f0",
                 }}
               >
-                <th
-                  style={{
-                    padding: "20px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  ID
+                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
+                  Reference
                 </th>
-                <th
-                  style={{
-                    padding: "20px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
-                  Type
-                </th>
-                <th
-                  style={{
-                    padding: "20px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
+                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
                   Content
                 </th>
-                <th
-                  style={{
-                    padding: "20px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
+                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
+                  Prediction
+                </th>
+                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
                   Risk Score
                 </th>
-                <th
-                  style={{
-                    padding: "20px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
+                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
                   Date
                 </th>
-                <th
-                  style={{
-                    padding: "20px",
-                    textAlign: "left",
-                    fontWeight: "600",
-                    color: "#475569",
-                  }}
-                >
+                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
                   Actions
                 </th>
               </tr>
@@ -1121,22 +1034,9 @@ const History = () => {
             <tbody>
               {filteredScans.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan="6"
-                    style={{
-                      textAlign: "center",
-                      padding: "80px",
-                      color: "#94a3b8",
-                    }}
-                  >
-                    <FaShieldAlt
-                      style={{
-                        fontSize: "48px",
-                        marginBottom: "16px",
-                        opacity: 0.5,
-                      }}
-                    />
-                    <p>No scans found. Start scanning to see results here.</p>
+                  <td colSpan="6" style={{ textAlign: "center", padding: "80px", color: "#94a3b8" }}>
+                    <FaShieldAlt style={{ fontSize: "48px", marginBottom: "16px", opacity: 0.5 }} />
+                    <p>No scans found.</p>
                     {searchTerm && (
                       <button
                         onClick={() => setSearchTerm("")}
@@ -1158,38 +1058,34 @@ const History = () => {
                 </tr>
               ) : (
                 filteredScans.map((scan) => {
-                  const scanId = scan?.id || scan?._id;
-                  const isDownloading = downloadingId === scanId;
-                  const isDeleting = deletingId === scanId;
+                  const reference = scan?.reference;
+                  const isDownloading = downloadingId === reference;
+                  const isDeleting = deletingId === reference;
                   const isGuest = scan?.isGuest === true;
-
-                  const highlightText = (text, term) => {
-                    if (!term || !text) return text;
-                    const index = text.toLowerCase().indexOf(term.toLowerCase());
-                    if (index === -1) return text;
-                    const before = text.substring(0, index);
-                    const match = text.substring(index, index + term.length);
-                    const after = text.substring(index + term.length);
-                    return (
-                      <>
-                        {before}
-                        <span style={{ 
-                          background: "#fef3c7", 
-                          padding: "0 2px", 
-                          borderRadius: "2px",
-                          fontWeight: "bold",
-                          color: "#b45309"
-                        }}>
-                          {match}
-                        </span>
-                        {after}
-                      </>
-                    );
+                  const prediction = scan?.prediction || "UNKNOWN";
+                  
+                  const getPredictionColor = (pred) => {
+                    switch (pred?.toUpperCase()) {
+                      case "PHISHING":
+                      case "DANGEROUS":
+                      case "MALICIOUS":
+                        return { bg: "#fee2e2", color: "#dc2626" };
+                      case "SUSPICIOUS":
+                      case "WARNING":
+                        return { bg: "#fef3c7", color: "#d97706" };
+                      case "SAFE":
+                      case "LEGITIMATE":
+                        return { bg: "#d1fae5", color: "#065f46" };
+                      default:
+                        return { bg: "#f1f5f9", color: "#64748b" };
+                    }
                   };
+
+                  const predColor = getPredictionColor(prediction);
 
                   return (
                     <tr
-                      key={scanId || Math.random()}
+                      key={reference || Math.random()}
                       style={{
                         borderBottom: "1px solid #f1f5f9",
                         transition: "background 0.3s",
@@ -1198,52 +1094,26 @@ const History = () => {
                       onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = isGuest ? "#f8fafc" : "white")}
                     >
-                      <td
-                        style={{
-                          padding: "16px 20px",
-                          fontWeight: "600",
-                          color: isGuest ? "#94a3b8" : "#667eea",
-                        }}
-                      >
+                      <td style={{ padding: "16px 20px", fontWeight: "600", color: "#667eea", fontSize: "13px", fontFamily: "monospace" }}>
                         <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                           <FaHashtag size={10} style={{ opacity: 0.5 }} />
-                          {scanId || "N/A"}
+                          {reference ? truncateText(reference, 20) : "N/A"}
                           {isGuest && (
-                            <span
-                              style={{
-                                marginLeft: "8px",
-                                fontSize: "9px",
-                                background: "#94a3b8",
-                                color: "white",
-                                padding: "1px 8px",
-                                borderRadius: "4px",
-                                fontWeight: "500",
-                              }}
-                            >
+                            <span style={{
+                              marginLeft: "8px",
+                              fontSize: "9px",
+                              background: "#94a3b8",
+                              color: "white",
+                              padding: "1px 8px",
+                              borderRadius: "4px",
+                              fontWeight: "500",
+                            }}>
                               Guest
                             </span>
                           )}
                         </span>
                       </td>
-                      <td style={{ padding: "16px 20px" }}>
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "6px 12px",
-                            borderRadius: "10px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            background: scan?.type === "url" ? "#e3f2fd" : "#f3e5f5",
-                            color: scan?.type === "url" ? "#1976d2" : "#7b1fa2",
-                          }}
-                        >
-                          {scan?.type === "url" ? <FaLink size={12} /> : <FaEnvelope size={12} />}
-                          {scan?.type === "url" ? "URL" : "Message"}
-                        </span>
-                      </td>
-                      <td style={{ padding: "16px 20px", maxWidth: "400px" }}>
+                      <td style={{ padding: "16px 20px", maxWidth: "300px" }}>
                         <div
                           style={{
                             overflow: "hidden",
@@ -1251,13 +1121,24 @@ const History = () => {
                             whiteSpace: "nowrap",
                             color: "#475569",
                           }}
-                          title={scan?.content || scan?.message || "N/A"}
+                          title={scan?.content || scan?.url || "N/A"}
                         >
-                          {highlightText(
-                            truncateText(scan?.content || scan?.message || "N/A", 60),
-                            searchTerm
-                          )}
+                          {truncateText(scan?.content || scan?.url || "N/A", 50)}
                         </div>
+                      </td>
+                      <td style={{ padding: "16px 20px" }}>
+                        <span
+                          style={{
+                            padding: "4px 12px",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            background: predColor.bg,
+                            color: predColor.color,
+                          }}
+                        >
+                          {prediction}
+                        </span>
                       </td>
                       <td style={{ padding: "16px 20px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -1290,22 +1171,17 @@ const History = () => {
                           </span>
                         </div>
                       </td>
-                      <td
-                        style={{
-                          padding: "16px 20px",
-                          color: "#64748b",
-                          fontSize: "14px",
-                        }}
-                      >
+                      <td style={{ padding: "16px 20px", color: "#64748b", fontSize: "14px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <FaCalendar size={12} />
-                          {formatDate(scan?.date || scan?.timestamp || Date.now())}
+                          {formatDate(scan?.scannedAt || scan?.date || scan?.timestamp || Date.now())}
                         </div>
                       </td>
                       <td style={{ padding: "16px 20px" }}>
                         <div style={{ display: "flex", gap: "8px" }}>
                           <button
-                            onClick={() => handleViewDetails(scanId, scan?.type)}
+                            onClick={() => handleViewDetails(reference)}
+                            disabled={!isAuthenticated}
                             style={{
                               background: "none",
                               border: "none",
@@ -1320,7 +1196,7 @@ const History = () => {
                             <FaEye />
                           </button>
                           <button
-                            onClick={() => handleDownloadPDF(scanId, scan?.type)}
+                            onClick={() => handleDownloadReport(reference)}
                             disabled={isDownloading || !isAuthenticated}
                             style={{
                               background: "none",
@@ -1334,19 +1210,16 @@ const History = () => {
                               alignItems: "center",
                               gap: "4px",
                             }}
-                            title={isAuthenticated ? "Download PDF" : "Sign in to download PDF"}
+                            title={isAuthenticated ? "Download report" : "Sign in to download report"}
                           >
                             {isDownloading ? (
-                              <>
-                                <FaSpinner className="spinning" size={14} />
-                                <span style={{ fontSize: "11px" }}>...</span>
-                              </>
+                              <FaSpinner className="spinning" size={14} />
                             ) : (
-                              <FaDownload />
+                              <FaFilePdf />
                             )}
                           </button>
                           <button
-                            onClick={() => handleDeleteScan(scanId, scan?.type)}
+                            onClick={() => handleDeleteScan(reference)}
                             disabled={isDeleting || !isAuthenticated}
                             style={{
                               background: "none",
@@ -1363,10 +1236,7 @@ const History = () => {
                             title={isAuthenticated ? "Delete scan" : "Sign in to delete"}
                           >
                             {isDeleting ? (
-                              <>
-                                <FaSpinner className="spinning" size={14} />
-                                <span style={{ fontSize: "11px" }}>...</span>
-                              </>
+                              <FaSpinner className="spinning" size={14} />
                             ) : (
                               <FaTrashAlt />
                             )}
@@ -1382,9 +1252,7 @@ const History = () => {
         </div>
       </div>
 
-      {/* ============================================ */}
-      {/* CLEAR ALL CONFIRMATION MODAL */}
-      {/* ============================================ */}
+      {/* Clear All Confirmation Modal */}
       {showClearConfirm && (
         <div
           style={{
@@ -1436,8 +1304,7 @@ const History = () => {
               Clear All History?
             </h3>
             <p style={{ color: "#64748b", marginBottom: "8px" }}>
-              This action cannot be undone. All {scans.length} scan records will be permanently
-              deleted.
+              This action cannot be undone. All {scans.length} scan records will be permanently deleted.
             </p>
             {!isAuthenticated && (
               <p style={{ color: "#d97706", fontSize: "14px", marginBottom: "24px", background: "#fef3c7", padding: "8px", borderRadius: "8px" }}>
@@ -1477,16 +1344,6 @@ const History = () => {
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
-                }}
-                onMouseEnter={(e) => {
-                  if (!clearingAll) {
-                    e.currentTarget.style.background = "#dc2626";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!clearingAll) {
-                    e.currentTarget.style.background = "#ef4444";
-                  }
                 }}
               >
                 {clearingAll ? (
@@ -1564,172 +1421,124 @@ const History = () => {
                   fontSize: "20px",
                   transition: "all 0.3s",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#e2e8f0")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#f1f5f9")}
               >
                 ✕
               </button>
             </div>
 
             <div style={{ padding: "32px" }}>
-              {/* ... details content (same as before) ... */}
+              {/* Reference */}
               <div style={{ marginBottom: "24px" }}>
-                <h3
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: "#64748b",
-                    marginBottom: "8px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Content
+                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                  Reference
                 </h3>
-                <div
-                  style={{
-                    background: "#f8fafc",
-                    padding: "16px",
-                    borderRadius: "16px",
-                    color: "#1e293b",
-                    lineHeight: "1.6",
-                    wordBreak: "break-all",
-                  }}
-                >
-                  {selectedScan?.content || selectedScan?.message || "N/A"}
+                <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: "12px", color: "#1e293b", fontFamily: "monospace", fontSize: "14px" }}>
+                  {selectedScan.reference}
                 </div>
               </div>
 
+              {/* URL */}
               <div style={{ marginBottom: "24px" }}>
-                <h3
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: "#64748b",
-                    marginBottom: "8px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Risk Assessment
+                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                  URL
                 </h3>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "16px",
-                    padding: "16px",
-                    background: "#f8fafc",
-                    borderRadius: "16px",
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        height: "8px",
-                        background: "#e2e8f0",
-                        borderRadius: "4px",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${selectedScan?.riskScore || 0}%`,
-                          height: "100%",
-                          background:
-                            (selectedScan?.riskScore || 0) > 70
-                              ? "#ef4444"
-                              : (selectedScan?.riskScore || 0) > 30
-                              ? "#f59e0b"
-                              : "#10b981",
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: "24px", fontWeight: "800", color: "#1e293b" }}>
-                    {selectedScan?.riskScore || 0}%
-                  </span>
+                <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: "12px", color: "#1e293b", wordBreak: "break-all" }}>
+                  {selectedScan.url}
                 </div>
               </div>
 
-              {selectedScan?.explanation && (
-                <div style={{ marginBottom: "24px" }}>
-                  <h3
-                    style={{
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      color: "#64748b",
-                      marginBottom: "8px",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    AI Analysis
-                  </h3>
-                  <div
-                    style={{
-                      padding: "16px",
-                      background: "#e3f2fd",
-                      borderRadius: "16px",
-                      color: "#1e293b",
-                      lineHeight: "1.6",
-                    }}
-                  >
-                    {selectedScan.explanation}
-                  </div>
-                </div>
-              )}
-
+              {/* Prediction */}
               <div style={{ marginBottom: "24px" }}>
-                <h3
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: "#64748b",
-                    marginBottom: "8px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Timestamp
+                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                  Prediction
                 </h3>
                 <div
                   style={{
                     padding: "12px 16px",
-                    background: "#f8fafc",
                     borderRadius: "12px",
-                    color: "#64748b",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
+                    background: selectedScan.prediction === "PHISHING" ? "#fee2e2" : "#d1fae5",
+                    color: selectedScan.prediction === "PHISHING" ? "#dc2626" : "#065f46",
+                    fontWeight: "600",
                   }}
                 >
-                  <FaCalendar />
-                  {formatDate(selectedScan?.date || selectedScan?.timestamp || Date.now())}
+                  {selectedScan.prediction}
                 </div>
               </div>
 
+              {/* Phishing Reasons */}
+              {selectedScan.phishingReasons && selectedScan.phishingReasons.length > 0 && (
+                <div style={{ marginBottom: "24px" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                    🚨 Phishing Indicators
+                  </h3>
+                  <div style={{ padding: "16px", background: "#fee2e2", borderRadius: "12px", color: "#dc2626" }}>
+                    <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                      {Array.isArray(selectedScan.phishingReasons) 
+                        ? selectedScan.phishingReasons.map((reason, i) => (
+                            <li key={i} style={{ marginBottom: "4px" }}>{reason}</li>
+                          ))
+                        : <li>{selectedScan.phishingReasons}</li>
+                      }
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Legitimate Reasons */}
+              {selectedScan.legitimateReasons && selectedScan.legitimateReasons.length > 0 && (
+                <div style={{ marginBottom: "24px" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                    ✅ Legitimate Indicators
+                  </h3>
+                  <div style={{ padding: "16px", background: "#d1fae5", borderRadius: "12px", color: "#065f46" }}>
+                    <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                      {Array.isArray(selectedScan.legitimateReasons) 
+                        ? selectedScan.legitimateReasons.map((reason, i) => (
+                            <li key={i} style={{ marginBottom: "4px" }}>{reason}</li>
+                          ))
+                        : <li>{selectedScan.legitimateReasons}</li>
+                      }
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Conclusion */}
+              <div style={{ marginBottom: "24px" }}>
+                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                  Conclusion
+                </h3>
+                <div style={{ padding: "16px", background: "#f8fafc", borderRadius: "12px", color: "#475569", lineHeight: "1.7" }}>
+                  {selectedScan.conclusion}
+                </div>
+              </div>
+
+              {/* Timestamp */}
+              <div style={{ marginBottom: "24px" }}>
+                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                  Scanned At
+                </h3>
+                <div style={{ padding: "12px 16px", background: "#f8fafc", borderRadius: "12px", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <FaCalendar />
+                  {formatDate(selectedScan.scannedAt)}
+                </div>
+              </div>
+
+              {/* Download Button */}
               <div>
                 <button
-                  onClick={() => {
-                    const scanId = selectedScan?.id || selectedScan?._id;
-                    if (scanId) {
-                      handleDownloadPDF(scanId, selectedScan?.type);
-                    }
-                  }}
-                  disabled={downloadingId === (selectedScan?.id || selectedScan?._id) || !isAuthenticated}
+                  onClick={() => handleDownloadReport(selectedScan.reference)}
+                  disabled={downloadingId === selectedScan.reference}
                   style={{
                     width: "100%",
                     padding: "14px",
-                    background:
-                      downloadingId === (selectedScan?.id || selectedScan?._id) || !isAuthenticated
-                        ? "#94a3b8"
-                        : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    background: downloadingId === selectedScan.reference ? "#94a3b8" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                     color: "white",
                     border: "none",
                     borderRadius: "12px",
                     fontSize: "16px",
                     fontWeight: "600",
-                    cursor:
-                      downloadingId === (selectedScan?.id || selectedScan?._id) || !isAuthenticated
-                        ? "not-allowed"
-                        : "pointer",
+                    cursor: downloadingId === selectedScan.reference ? "not-allowed" : "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1737,20 +1546,15 @@ const History = () => {
                     transition: "all 0.3s ease",
                   }}
                 >
-                  {downloadingId === (selectedScan?.id || selectedScan?._id) ? (
+                  {downloadingId === selectedScan.reference ? (
                     <>
                       <FaSpinner className="spinning" />
                       <span>Downloading...</span>
                     </>
-                  ) : !isAuthenticated ? (
-                    <>
-                      <FaUserPlus />
-                      <span>Sign in to Download PDF</span>
-                    </>
                   ) : (
                     <>
-                      <FaDownload />
-                      <span>Download PDF Report</span>
+                      <FaFilePdf />
+                      <span>Download Full Report</span>
                     </>
                   )}
                 </button>

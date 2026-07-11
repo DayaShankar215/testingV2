@@ -1,21 +1,21 @@
 // services/api.js
 import axios from "axios";
 
-// Use environment variable or fallback
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.78:8080/api";
+const API_BASE_URL = "https://mud-cable-passerby.ngrok-free.dev";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
+    "Accept": "application/json",
   },
-  timeout: 30000,
+  timeout: 60000,
 });
 
-// Add token interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("authToken");
+    config.headers["ngrok-skip-browser-warning"] = "true";
+    const token = localStorage.getItem("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -24,11 +24,28 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.code === "ERR_NETWORK") {
+      throw { message: "Cannot connect to server. Please check your connection.", isCorsError: true };
+    }
+    if (error.response) {
+      throw error.response.data || { message: "Server error occurred" };
+    }
+    throw { message: error.message || "An error occurred" };
+  }
+);
+
 // ==================== AUTH ENDPOINTS ====================
 
 export const register = async (userData) => {
   try {
     const response = await api.post("/auth/register", userData);
+    if (response.data.accessToken) {
+      localStorage.setItem("accessToken", response.data.accessToken);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+    }
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: "Registration failed" };
@@ -38,6 +55,10 @@ export const register = async (userData) => {
 export const login = async (credentials) => {
   try {
     const response = await api.post("/auth/login", credentials);
+    if (response.data.accessToken) {
+      localStorage.setItem("accessToken", response.data.accessToken);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+    }
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: "Login failed" };
@@ -47,24 +68,31 @@ export const login = async (credentials) => {
 export const logout = async () => {
   try {
     const response = await api.post("/auth/logout");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
     return response.data;
   } catch (error) {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
     throw error.response?.data || { message: "Logout failed" };
   }
 };
 
-export const getCurrentUser = async () => {
-  try {
-    const response = await api.get("/auth/me");
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || { message: "Failed to get user info" };
-  }
+export const getCurrentUser = () => {
+  const user = localStorage.getItem("user");
+  return user ? JSON.parse(user) : null;
+};
+
+export const isAuthenticated = () => {
+  return !!localStorage.getItem("accessToken");
 };
 
 export const updateProfile = async (userData) => {
   try {
     const response = await api.put("/auth/profile", userData);
+    if (response.data.user) {
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+    }
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: "Failed to update profile" };
@@ -82,11 +110,6 @@ export const changePassword = async (passwordData) => {
 
 // ==================== SCAN ENDPOINTS ====================
 
-/**
- * Scan a URL for phishing detection
- * @param {string} url - The URL to scan
- * @returns {Promise<Object>} Scan result with reference, prediction, conclusion
- */
 export const scanURL = async (url) => {
   try {
     const response = await api.post("/scans", { url });
@@ -96,11 +119,6 @@ export const scanURL = async (url) => {
   }
 };
 
-/**
- * Scan a message for scam detection
- * @param {string} message - The message to scan
- * @returns {Promise<Object>} Scan result with reference, prediction, conclusion
- */
 export const scanMessage = async (message) => {
   try {
     const response = await api.post("/scans", { message });
@@ -112,40 +130,58 @@ export const scanMessage = async (message) => {
 
 // ==================== HISTORY ENDPOINTS ====================
 
-export const getScanHistory = async (type = null) => {
+export const getScanHistory = async () => {
   try {
-    const params = type ? { type } : {};
-    const response = await api.get("/scans/history", { params });
+    const response = await api.get("/scans");
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: "Failed to fetch scan history" };
   }
 };
 
-export const getScanById = async (id, type) => {
+export const getScanByReference = async (reference) => {
   try {
-    const response = await api.get(`/scans/${type}/${id}`);
+    const response = await api.get(`/scans/${reference}`);
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: "Failed to fetch scan details" };
   }
 };
 
-export const deleteScanById = async (id, type) => {
+export const deleteScanByReference = async (reference) => {
   try {
-    const response = await api.delete(`/scans/${type}/${id}`);
+    const response = await api.delete(`/scans/${reference}`);
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: "Failed to delete scan" };
   }
 };
 
-export const clearScanHistory = async () => {
+// ==================== PDF REPORT DOWNLOAD ====================
+export const downloadScanReport = async (reference) => {
   try {
-    const response = await api.delete("/scans/clear");
-    return response.data;
+    const response = await api.get(`/scans/${reference}/report`, {
+      responseType: "blob",
+      headers: {
+        "Accept": "application/pdf",
+      },
+    });
+    return response;
   } catch (error) {
-    throw error.response?.data || { message: "Failed to clear scan history" };
+    if (error.response && error.response.data) {
+      try {
+        const errorText = await error.response.data.text();
+        try {
+          const errorJson = JSON.parse(errorText);
+          throw errorJson;
+        } catch {
+          throw { message: errorText || "Failed to download report" };
+        }
+      } catch {
+        throw { message: "Failed to download report" };
+      }
+    }
+    throw { message: "Failed to download report" };
   }
 };
 
@@ -160,8 +196,6 @@ export const getDashboardStats = async () => {
   }
 };
 
-// ==================== FEEDBACK ENDPOINTS ====================
-
 export const submitFeedback = async (scanId, type, isAccurate, comments, rating = null) => {
   try {
     const body = { scanId, type, isAccurate, comments };
@@ -170,28 +204,6 @@ export const submitFeedback = async (scanId, type, isAccurate, comments, rating 
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: "Failed to submit feedback" };
-  }
-};
-
-// ==================== PDF REPORT ENDPOINTS ====================
-
-export const downloadPDFReport = async (scanId, type) => {
-  try {
-    const response = await api.get(`/reports/${type}/${scanId}/pdf`, {
-      responseType: "blob",
-    });
-    return response;
-  } catch (error) {
-    if (error.response && error.response.data) {
-      const errorText = await error.response.data.text();
-      try {
-        const errorJson = JSON.parse(errorText);
-        throw errorJson;
-      } catch {
-        throw { message: errorText || "Failed to download PDF report" };
-      }
-    }
-    throw { message: "Failed to download PDF report" };
   }
 };
 

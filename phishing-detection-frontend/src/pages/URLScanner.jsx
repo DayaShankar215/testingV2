@@ -1,6 +1,6 @@
 // pages/URLScanner.jsx
 import React, { useState } from "react";
-import { scanURL, submitFeedback, downloadPDFReport } from "../services/api";
+import { scanURL, submitFeedback, getScanByReference } from "../services/api";
 import { validateURL } from "../utils/validators";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
@@ -20,20 +20,15 @@ import {
   FaSpinner,
   FaLock,
   FaUnlock,
-  FaGlobe,
   FaServer,
-  FaClock,
-  FaSearch,
-  FaChartLine,
-  FaDatabase,
   FaCode,
-  FaShieldVirus,
   FaUserSecret,
-  FaExternalLinkAlt,
   FaCheck,
   FaTimes,
-  FaArrowRight,
   FaUserPlus,
+  FaExclamationCircle,
+  FaWifi,
+  FaFilePdf,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -45,6 +40,7 @@ const URLScanner = () => {
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
 
   const { isAuthenticated } = useAuth();
   const { addScan } = useGuest();
@@ -61,6 +57,89 @@ const URLScanner = () => {
   const [submitting, setSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
+  const getRiskScoreFromPrediction = (prediction) => {
+    switch (prediction?.toUpperCase()) {
+      case "PHISHING":
+      case "DANGEROUS":
+      case "MALICIOUS":
+        return 85;
+      case "SUSPICIOUS":
+      case "WARNING":
+        return 55;
+      case "SAFE":
+      case "LEGITIMATE":
+        return 15;
+      default:
+        return 50;
+    }
+  };
+
+  const processScanResponse = (response, scannedUrl) => {
+    const prediction = response.prediction?.toUpperCase() || "UNKNOWN";
+    let riskScore = 50;
+    let resultType = "unknown";
+
+    switch (prediction) {
+      case "PHISHING":
+      case "DANGEROUS":
+      case "MALICIOUS":
+        riskScore = 85;
+        resultType = "phishing";
+        break;
+      case "SUSPICIOUS":
+      case "WARNING":
+        riskScore = 55;
+        resultType = "suspicious";
+        break;
+      case "SAFE":
+      case "LEGITIMATE":
+        riskScore = 15;
+        resultType = "safe";
+        break;
+      default:
+        riskScore = 50;
+        resultType = "unknown";
+    }
+
+    const features = extractURLFeatures(scannedUrl);
+
+    return {
+      reference: response.reference,
+      url: response.url || scannedUrl,
+      prediction: response.prediction,
+      classification: response.prediction || "UNKNOWN",
+      riskScore: riskScore,
+      confidence: 0.85,
+      explanation: response.conclusion || "Analysis completed",
+      result: resultType,
+      features: features,
+      scannedAt: response.scannedAt || new Date().toISOString(),
+    };
+  };
+
+  const extractURLFeatures = (url) => {
+    try {
+      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+      return {
+        urlLength: url.length,
+        hasHTTPS: urlObj.protocol === "https:",
+        hasIP: /^\d+\.\d+\.\d+\.\d+$/.test(urlObj.hostname),
+        specialChars: (url.match(/[^a-zA-Z0-9:/.]/g) || []).length,
+        hasSuspiciousKeywords: /(login|verify|account|secure|bank|paypal|confirm|update|password|credential)/i.test(url),
+        domain: urlObj.hostname,
+      };
+    } catch {
+      return {
+        urlLength: url.length,
+        hasHTTPS: url.startsWith("https://"),
+        hasIP: false,
+        specialChars: 0,
+        hasSuspiciousKeywords: false,
+        domain: "unknown",
+      };
+    }
+  };
+
   const handleScan = async (e) => {
     e.preventDefault();
 
@@ -73,29 +152,17 @@ const URLScanner = () => {
 
     setLoading(true);
     setError(null);
+    setConnectionError(false);
     setShowFeedback(false);
     setFeedbackSubmitted(false);
 
     try {
       const response = await scanURL(url);
-      
-      // Transform API response to match expected format
-      const scanResult = {
-        id: response.reference || `scan_${Date.now()}`,
-        url: response.url || url,
-        classification: response.prediction || "UNKNOWN",
-        riskScore: getRiskScoreFromPrediction(response.prediction),
-        confidence: 0.85, // Default confidence if not provided
-        explanation: response.conclusion || "Analysis completed",
-        result: getResultFromPrediction(response.prediction),
-        features: extractURLFeatures(url),
-        date: new Date().toISOString(),
-        reference: response.reference,
-      };
+      console.log("API Response:", response);
 
+      const scanResult = processScanResponse(response, url);
       setResult(scanResult);
-      
-      // Store in guest history if not authenticated
+
       if (!isAuthenticated) {
         addScan({
           ...scanResult,
@@ -103,116 +170,67 @@ const URLScanner = () => {
           content: url,
         });
       }
-      
+
       setShowFeedback(true);
-      setFeedback((prev) => ({ ...prev, scanId: scanResult.id }));
+      setFeedback((prev) => ({ ...prev, scanId: response.reference }));
       toast.success("Scan completed successfully!");
     } catch (err) {
-      const errorMsg = err.message || "Failed to scan URL";
-      setError(errorMsg);
-      toast.error(errorMsg);
+      console.error("Scan Error:", err);
+      
+      if (err.isCorsError || err.message?.includes("CORS") || err.message?.includes("Network")) {
+        setConnectionError(true);
+        setError("Cannot connect to the server. Please check your connection.");
+        toast.error("Connection Error");
+      } else {
+        const errorMsg = err.message || "Failed to scan URL";
+        setError(errorMsg);
+        toast.error(errorMsg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const getRiskScoreFromPrediction = (prediction) => {
-    switch (prediction?.toUpperCase()) {
-      case "PHISHING":
-      case "DANGEROUS":
-      case "MALICIOUS":
-        return 85;
-      case "SUSPICIOUS":
-      case "WARNING":
-        return 55;
-      case "SAFE":
-      case "LEGITIMATE":
-      default:
-        return 15;
-    }
-  };
-
-  const getResultFromPrediction = (prediction) => {
-    switch (prediction?.toUpperCase()) {
-      case "PHISHING":
-      case "DANGEROUS":
-      case "MALICIOUS":
-        return "phishing";
-      case "SUSPICIOUS":
-      case "WARNING":
-        return "suspicious";
-      case "SAFE":
-      case "LEGITIMATE":
-      default:
-        return "safe";
-    }
-  };
-
-  const extractURLFeatures = (url) => {
-    try {
-      const urlObj = new URL(url);
-      return {
-        urlLength: url.length,
-        hasHTTPS: urlObj.protocol === "https:",
-        hasIP: /^\d+\.\d+\.\d+\.\d+$/.test(urlObj.hostname),
-        specialChars: (url.match(/[^a-zA-Z0-9:/.]/g) || []).length,
-        hasSuspiciousKeywords: /(login|verify|account|secure|bank|paypal|confirm|update)/i.test(url),
-      };
-    } catch {
-      return {
-        urlLength: url.length,
-        hasHTTPS: url.startsWith("https://"),
-        hasIP: false,
-        specialChars: 0,
-        hasSuspiciousKeywords: false,
-      };
-    }
-  };
-
-  const handleDownloadPDF = async () => {
+  const handleDownloadReport = async () => {
     if (!result || downloading) return;
-    
+
     if (!isAuthenticated) {
       setShowAuthModal(true);
       return;
     }
-    
-    const scanId = result.id || result.reference;
-    if (!scanId) {
-      toast.error("Scan ID not found");
+
+    const reference = result.reference;
+    if (!reference) {
+      toast.error("Scan reference not found");
       return;
     }
 
     setDownloading(true);
     try {
-      const response = await downloadPDFReport(scanId, "url");
+      // Fetch scan details for PDF generation
+      const scanDetails = await getScanByReference(reference);
+      console.log("Scan Details for PDF:", scanDetails);
       
-      if (!response || !response.data) {
-        throw new Error("No data received from server");
-      }
-
-      const blob = new Blob([response.data], { 
-        type: response.headers?.['content-type'] || 'application/pdf' 
-      });
+      // Format the data for PDF generation
+      const pdfData = {
+        reference: scanDetails.reference,
+        url: scanDetails.url,
+        prediction: scanDetails.prediction,
+        riskScore: result.riskScore || getRiskScoreFromPrediction(scanDetails.prediction),
+        conclusion: scanDetails.conclusion,
+        scannedAt: scanDetails.scannedAt,
+        phishingReasons: scanDetails.phishingReasons || [],
+        legitimateReasons: scanDetails.legitimateReasons || [],
+      };
       
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `security_report_${scanId}.pdf`;
-      link.style.display = 'none';
+      // Generate PDF using our custom generator
+      const { downloadPDF } = await import('../services/pdfGenerator');
+      downloadPDF(pdfData, 'url');
       
-      document.body.appendChild(link);
-      link.click();
-      
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(downloadUrl);
-      }, 100);
-      
-      toast.success("PDF report downloaded successfully!");
+      toast.success("Report downloaded successfully!");
     } catch (error) {
-      console.error("PDF Download Error:", error);
-      toast.error(error.message || "Failed to download PDF report");
+      console.error("Download Error:", error);
+      toast.error(error.message || "Failed to download report");
     } finally {
       setDownloading(false);
     }
@@ -245,7 +263,7 @@ const URLScanner = () => {
         feedback.type,
         feedback.isAccurate,
         feedback.comments,
-        feedback.rating,
+        feedback.rating
       );
       setFeedbackSubmitted(true);
       toast.success("Thank you for your feedback! 🎉");
@@ -287,29 +305,31 @@ const URLScanner = () => {
   };
 
   const getRiskLevel = (score) => {
-    if (score > 70) return { 
-      label: "High Risk", 
-      color: "#ef4444", 
-      bg: "#fee2e2", 
-      border: "#fca5a5",
-      icon: "🚨",
-      badge: "Dangerous"
-    };
-    if (score > 30) return { 
-      label: "Medium Risk", 
-      color: "#f59e0b", 
-      bg: "#fef3c7", 
-      border: "#fcd34d",
-      icon: "⚠️",
-      badge: "Suspicious"
-    };
-    return { 
-      label: "Low Risk", 
-      color: "#10b981", 
-      bg: "#d1fae5", 
+    if (score > 70)
+      return {
+        label: "High Risk",
+        color: "#ef4444",
+        bg: "#fee2e2",
+        border: "#fca5a5",
+        icon: "🚨",
+        badge: "Phishing",
+      };
+    if (score > 30)
+      return {
+        label: "Medium Risk",
+        color: "#f59e0b",
+        bg: "#fef3c7",
+        border: "#fcd34d",
+        icon: "⚠️",
+        badge: "Suspicious",
+      };
+    return {
+      label: "Low Risk",
+      color: "#10b981",
+      bg: "#d1fae5",
       border: "#6ee7b7",
       icon: "✅",
-      badge: "Safe"
+      badge: "Safe",
     };
   };
 
@@ -368,15 +388,17 @@ const URLScanner = () => {
           websites using advanced machine learning
         </p>
         {!isAuthenticated && (
-          <p style={{ 
-            fontSize: "14px", 
-            color: "#94a3b8", 
-            marginTop: "8px",
-            background: "#f1f5f9",
-            padding: "6px 16px",
-            borderRadius: "100px",
-            display: "inline-block",
-          }}>
+          <p
+            style={{
+              fontSize: "14px",
+              color: "#94a3b8",
+              marginTop: "8px",
+              background: "#f1f5f9",
+              padding: "6px 16px",
+              borderRadius: "100px",
+              display: "inline-block",
+            }}
+          >
             👋 Guest mode • Sign up to save your scan history
           </p>
         )}
@@ -488,9 +510,7 @@ const URLScanner = () => {
                 )}
               </button>
             </div>
-            <p
-              style={{ fontSize: "12px", color: "#94a3b8", marginTop: "12px" }}
-            >
+            <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "12px" }}>
               Supports HTTP, HTTPS, and all standard URL formats
             </p>
           </div>
@@ -498,7 +518,52 @@ const URLScanner = () => {
       </div>
 
       {/* Error Display */}
-      {error && (
+      {connectionError && (
+        <div
+          style={{
+            background: "#fef2f2",
+            border: "2px solid #fca5a5",
+            borderRadius: "16px",
+            padding: "24px",
+            marginBottom: "24px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "16px" }}>
+            <FaExclamationCircle style={{ color: "#dc2626", fontSize: "32px", flexShrink: 0, marginTop: "4px" }} />
+            <div style={{ flex: 1 }}>
+              <h3 style={{ color: "#dc2626", margin: "0 0 8px", fontSize: "18px" }}>
+                ⚠️ Connection Error
+              </h3>
+              <p style={{ color: "#475569", margin: "0 0 12px", lineHeight: "1.6" }}>
+                {error || "Cannot connect to the server. Please check your connection."}
+              </p>
+              <button
+                onClick={() => {
+                  setConnectionError(false);
+                  setError(null);
+                }}
+                style={{
+                  padding: "10px 24px",
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "12px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <FaWifi />
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && !connectionError && (
         <div
           style={{
             background: "#fee",
@@ -511,9 +576,7 @@ const URLScanner = () => {
             gap: "12px",
           }}
         >
-          <FaExclamationTriangle
-            style={{ color: "#ef4444", fontSize: "20px" }}
-          />
+          <FaExclamationTriangle style={{ color: "#ef4444", fontSize: "20px" }} />
           <p style={{ color: "#dc2626", margin: 0 }}>{error}</p>
         </div>
       )}
@@ -546,7 +609,7 @@ const URLScanner = () => {
                 transform: "translate(100px, -100px)",
               }}
             />
-            
+
             <div
               style={{
                 display: "flex",
@@ -635,7 +698,7 @@ const URLScanner = () => {
 
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                 <button
-                  onClick={handleDownloadPDF}
+                  onClick={handleDownloadReport}
                   disabled={downloading}
                   style={{
                     background: riskLevel.color,
@@ -678,7 +741,7 @@ const URLScanner = () => {
                     </>
                   ) : (
                     <>
-                      <FaDownload />
+                      <FaFilePdf />
                       <span>Download Report</span>
                     </>
                   )}
@@ -735,8 +798,8 @@ const URLScanner = () => {
               {result.riskScore > 70
                 ? "🚫 HIGH RISK: This website appears to be a phishing site! Do not proceed."
                 : result.riskScore > 30
-                  ? "⚠️ MEDIUM RISK: This website shows suspicious characteristics. Exercise caution."
-                  : "✅ LOW RISK: This website appears to be safe."}
+                ? "⚠️ MEDIUM RISK: This website shows suspicious characteristics. Exercise caution."
+                : "✅ LOW RISK: This website appears to be safe."}
             </p>
           </div>
 
@@ -820,7 +883,7 @@ const URLScanner = () => {
                     margin: 0,
                   }}
                 >
-                  {result.classification}
+                  {result.prediction || result.classification}
                 </p>
               </div>
               <div
@@ -1069,7 +1132,9 @@ const URLScanner = () => {
                     padding: "14px 18px",
                     background: result.features.hasHTTPS ? "#ecfdf5" : "#fef2f2",
                     borderRadius: "12px",
-                    border: `1px solid ${result.features.hasHTTPS ? "#6ee7b7" : "#fca5a5"}`,
+                    border: `1px solid ${
+                      result.features.hasHTTPS ? "#6ee7b7" : "#fca5a5"
+                    }`,
                   }}
                 >
                   <div
@@ -1182,7 +1247,9 @@ const URLScanner = () => {
                     padding: "14px 18px",
                     background: result.features.hasIP ? "#fef2f2" : "#ecfdf5",
                     borderRadius: "12px",
-                    border: `1px solid ${result.features.hasIP ? "#fca5a5" : "#6ee7b7"}`,
+                    border: `1px solid ${
+                      result.features.hasIP ? "#fca5a5" : "#6ee7b7"
+                    }`,
                   }}
                 >
                   <div
@@ -1242,21 +1309,29 @@ const URLScanner = () => {
                     alignItems: "center",
                     gap: "14px",
                     padding: "14px 18px",
-                    background: result.features.hasSuspiciousKeywords ? "#fef2f2" : "#ecfdf5",
+                    background: result.features.hasSuspiciousKeywords
+                      ? "#fef2f2"
+                      : "#ecfdf5",
                     borderRadius: "12px",
-                    border: `1px solid ${result.features.hasSuspiciousKeywords ? "#fca5a5" : "#6ee7b7"}`,
+                    border: `1px solid ${
+                      result.features.hasSuspiciousKeywords ? "#fca5a5" : "#6ee7b7"
+                    }`,
                   }}
                 >
                   <div
                     style={{
                       width: "36px",
                       height: "36px",
-                      background: result.features.hasSuspiciousKeywords ? "#fee2e2" : "#d1fae5",
+                      background: result.features.hasSuspiciousKeywords
+                        ? "#fee2e2"
+                        : "#d1fae5",
                       borderRadius: "10px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      color: result.features.hasSuspiciousKeywords ? "#ef4444" : "#10b981",
+                      color: result.features.hasSuspiciousKeywords
+                        ? "#ef4444"
+                        : "#10b981",
                       fontSize: "16px",
                     }}
                   >
@@ -1278,7 +1353,9 @@ const URLScanner = () => {
                       style={{
                         fontSize: "18px",
                         fontWeight: "700",
-                        color: result.features.hasSuspiciousKeywords ? "#ef4444" : "#10b981",
+                        color: result.features.hasSuspiciousKeywords
+                          ? "#ef4444"
+                          : "#10b981",
                         display: "flex",
                         alignItems: "center",
                         gap: "6px",
@@ -1366,8 +1443,8 @@ const URLScanner = () => {
               {result.riskScore > 70
                 ? "🚫 DO NOT proceed to this website. Report this URL to security authorities immediately. This is a confirmed phishing attempt designed to steal your credentials."
                 : result.riskScore > 30
-                  ? "⚠️ Exercise extreme caution. Verify the website's authenticity through official channels before entering any personal information or credentials."
-                  : "✅ You can safely proceed. However, always verify the URL matches the official website before entering sensitive information."}
+                ? "⚠️ Exercise extreme caution. Verify the website's authenticity through official channels before entering any personal information or credentials."
+                : "✅ You can safely proceed. However, always verify the URL matches the official website before entering sensitive information."}
             </p>
           </div>
 
@@ -1553,12 +1630,12 @@ const URLScanner = () => {
                         {feedback.rating === 5
                           ? "🌟 Excellent!"
                           : feedback.rating === 4
-                            ? "😊 Good"
-                            : feedback.rating === 3
-                              ? "😐 Average"
-                              : feedback.rating === 2
-                                ? "😕 Poor"
-                                : "😞 Very Poor"}
+                          ? "😊 Good"
+                          : feedback.rating === 3
+                          ? "😐 Average"
+                          : feedback.rating === 2
+                          ? "😕 Poor"
+                          : "😞 Very Poor"}
                       </span>
                     )}
                   </div>
@@ -1696,7 +1773,7 @@ const URLScanner = () => {
         initialMode="register"
         onSuccess={() => {
           setShowAuthModal(false);
-          toast.success("Welcome! You can now download PDF reports.");
+          toast.success("Welcome! You can now download reports.");
         }}
       />
 
