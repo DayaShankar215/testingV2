@@ -4,6 +4,7 @@ import {
   getScanHistory,
   getScanByReference,
   deleteScanByReference,
+  downloadScanReport,
 } from "../services/api";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import { formatDate, truncateText } from "../utils/formatters";
@@ -19,7 +20,6 @@ import {
   FaShieldAlt,
   FaLink,
   FaEnvelope,
-  FaTrash,
   FaTrashAlt,
   FaSpinner,
   FaExclamationTriangle,
@@ -41,20 +41,16 @@ const History = () => {
   const [showModal, setShowModal] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [clearingAll, setClearingAll] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     url: 0,
     message: 0,
-    avgRisk: 0,
   });
 
-  const { isAuthenticated } = useAuth();
-  const { scans: guestScans, getStats: getGuestStats, clearScans: clearGuestScans } = useGuest();
+  const { isAuthenticated, logout } = useAuth();
+  const { scans: guestScans } = useGuest();
 
-  // Date Filter State
   const [dateFilter, setDateFilter] = useState({
     preset: "all",
   });
@@ -73,11 +69,11 @@ const History = () => {
   const fetchHistory = async () => {
     try {
       setLoading(true);
-      
+
       if (isAuthenticated) {
         const response = await getScanHistory();
         console.log("Scan History Response:", response);
-        
+
         let scansData = [];
         if (response && response.scans && Array.isArray(response.scans)) {
           scansData = response.scans;
@@ -86,27 +82,24 @@ const History = () => {
         } else if (response && response.response && Array.isArray(response.response)) {
           scansData = response.response;
         }
-        
-        // Transform API response to frontend format
-        const formattedScans = scansData.map(scan => ({
+
+        const formattedScans = scansData.map((scan) => ({
           reference: scan.reference,
           url: scan.url,
           prediction: scan.prediction,
           conclusion: scan.conclusion,
           scannedAt: scan.scannedAt,
           type: "url",
-          riskScore: getRiskScoreFromPrediction(scan.prediction),
-          result: getResultFromPrediction(scan.prediction),
           content: scan.url,
           _raw: scan,
         }));
-        
+
         setScans(formattedScans);
       } else {
-        // Use guest scans
-        const guestFiltered = filter === "all" 
-          ? guestScans 
-          : guestScans.filter(s => s.type === filter);
+        const guestFiltered =
+          filter === "all"
+            ? guestScans
+            : guestScans.filter((s) => s.type === filter);
         setScans(guestFiltered);
       }
     } catch (error) {
@@ -120,47 +113,11 @@ const History = () => {
     }
   };
 
-  const getRiskScoreFromPrediction = (prediction) => {
-    switch (prediction?.toUpperCase()) {
-      case "PHISHING":
-      case "DANGEROUS":
-      case "MALICIOUS":
-        return 85;
-      case "SUSPICIOUS":
-      case "WARNING":
-        return 55;
-      case "SAFE":
-      case "LEGITIMATE":
-        return 15;
-      default:
-        return 50;
-    }
-  };
-
-  const getResultFromPrediction = (prediction) => {
-    switch (prediction?.toUpperCase()) {
-      case "PHISHING":
-      case "DANGEROUS":
-      case "MALICIOUS":
-        return "phishing";
-      case "SUSPICIOUS":
-      case "WARNING":
-        return "suspicious";
-      case "SAFE":
-      case "LEGITIMATE":
-        return "safe";
-      default:
-        return "unknown";
-    }
-  };
-
   const calculateStats = () => {
     const total = scans.length;
     const url = scans.filter((s) => s?.type === "url").length;
     const message = scans.filter((s) => s?.type === "message").length;
-    const avgRisk =
-      total > 0 ? scans.reduce((sum, s) => sum + (s?.riskScore || 0), 0) / total : 0;
-    setStats({ total, url, message, avgRisk });
+    setStats({ total, url, message });
   };
 
   const getDateFilteredScans = (scansList) => {
@@ -176,7 +133,9 @@ const History = () => {
     monthAgo.setDate(monthAgo.getDate() - 30);
 
     return scansList.filter((scan) => {
-      const scanDate = new Date(scan?.scannedAt || scan?.date || scan?.timestamp || scan?.createdAt);
+      const scanDate = new Date(
+        scan?.scannedAt || scan?.date || scan?.timestamp || scan?.createdAt
+      );
 
       switch (dateFilter.preset) {
         case "today":
@@ -251,129 +210,109 @@ const History = () => {
     }
   };
 
-  const handleViewDetails = async (reference) => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
-    }
+  // pages/History.jsx - Update handleDownloadReport function
 
-    try {
-      const response = await getScanByReference(reference);
-      console.log("Scan Details Response:", response);
-      
-      setSelectedScan({
-        reference: response.reference,
-        url: response.url,
-        prediction: response.prediction,
-        legitimateReasons: response.legitimateReasons || [],
-        phishingReasons: response.phishingReasons || [],
-        conclusion: response.conclusion,
-        scannedAt: response.scannedAt,
-        riskScore: getRiskScoreFromPrediction(response.prediction),
-        result: getResultFromPrediction(response.prediction),
-      });
-      setShowModal(true);
-    } catch (error) {
-      console.error("Error fetching scan details:", error);
-      toast.error("Failed to load scan details");
-    }
-  };
+const handleDownloadReport = async (reference) => {
+  if (!isAuthenticated) {
+    setShowAuthModal(true);
+    return;
+  }
 
-  const handleDownloadReport = async (reference) => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
-    }
+  if (downloadingId === reference) return;
 
-    if (downloadingId === reference) return;
+  setDownloadingId(reference);
+  const toastId = toast.loading("Generating PDF report...");
 
-    setDownloadingId(reference);
-    try {
-      // Fetch scan details for PDF generation
-      const scanDetails = await getScanByReference(reference);
-      console.log("Scan Details for PDF:", scanDetails);
-      
-      // Format the data for PDF generation
-      const pdfData = {
-        reference: scanDetails.reference,
-        url: scanDetails.url,
-        prediction: scanDetails.prediction,
-        riskScore: getRiskScoreFromPrediction(scanDetails.prediction),
-        conclusion: scanDetails.conclusion,
-        scannedAt: scanDetails.scannedAt,
-        phishingReasons: scanDetails.phishingReasons || [],
-        legitimateReasons: scanDetails.legitimateReasons || [],
-      };
-      
-      // Generate PDF using our custom generator
-      const { downloadPDF } = await import('../services/pdfGenerator');
-      downloadPDF(pdfData, 'url');
-      
-      toast.success("Report downloaded successfully!");
-    } catch (error) {
-      console.error("Download Error:", error);
-      toast.error(error.message || "Failed to download report");
-    } finally {
-      setDownloadingId(null);
-    }
-  };
+  try {
+    // Get the full scan details from API
+    const scanDetails = await getScanByReference(reference);
+    console.log("Scan Details:", scanDetails);
+    
+    // Prepare data for PDF - This matches the JSON structure you showed
+    const pdfData = {
+      reference: scanDetails.reference,
+      url: scanDetails.url,
+      prediction: scanDetails.prediction,
+      conclusion: scanDetails.conclusion,
+      scannedAt: scanDetails.scannedAt,
+      phishingReasons: scanDetails.phishingReasons || [],
+      legitimateReasons: scanDetails.legitimateReasons || [],
+    };
+    
+    // Import PDF generator and download
+    const { downloadPDF } = await import('../services/pdfGenerator');
+    downloadPDF(pdfData, 'url');
+    
+    toast.success("PDF report downloaded successfully!", { id: toastId });
+  } catch (error) {
+    console.error("Download Error:", error);
+    toast.error(error.message || "Failed to download report", { id: toastId });
+  } finally {
+    setDownloadingId(null);
+  }
+};
 
   const handleDeleteScan = async (reference) => {
+    console.log("=== DELETE SCAN CLICKED ===");
+    console.log("Reference:", reference);
+    console.log("Is Authenticated:", isAuthenticated);
+
     if (!isAuthenticated) {
+      console.log("❌ Not authenticated, showing auth modal");
       setShowAuthModal(true);
       return;
     }
 
-    if (deletingId === reference) return;
+    if (deletingId === reference) {
+      console.log("⚠️ Already deleting this scan");
+      return;
+    }
 
-    if (!window.confirm("Are you sure you want to delete this scan? This action cannot be undone.")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this scan? This action cannot be undone."
+      )
+    ) {
+      console.log("❌ User cancelled deletion");
       return;
     }
 
     setDeletingId(reference);
+    const toastId = toast.loading("Deleting scan...");
+
     try {
-      await deleteScanByReference(reference);
-      toast.success("Scan deleted successfully!");
+      console.log(`🗑️ Calling deleteScanByReference with: ${reference}`);
+      const response = await deleteScanByReference(reference);
+      console.log("✅ Delete Response:", response);
+
+      toast.success(response?.message || "Scan deleted successfully!", {
+        id: toastId,
+      });
+
+      setScans((prev) => prev.filter((scan) => scan.reference !== reference));
       await fetchHistory();
     } catch (error) {
-      console.error("Delete Error:", error);
-      toast.error(error.message || "Failed to delete scan");
+      console.error("❌ Delete Error:", error);
+
+      if (error.status === 401) {
+        toast.error("Session expired. Please login again.", { id: toastId });
+        setTimeout(() => logout(), 1500);
+      } else if (error.status === 403) {
+        toast.error("You don't have permission to delete this scan.", {
+          id: toastId,
+        });
+      } else if (error.status === 404) {
+        toast.error("Scan not found. It may have been already deleted.", {
+          id: toastId,
+        });
+        setScans((prev) => prev.filter((scan) => scan.reference !== reference));
+      } else {
+        toast.error(error.message || "Failed to delete scan. Please try again.", {
+          id: toastId,
+        });
+      }
     } finally {
       setDeletingId(null);
-    }
-  };
-
-  const handleClearAllHistory = async () => {
-    if (scans.length === 0) {
-      toast.error("No history to clear");
-      setShowClearConfirm(false);
-      return;
-    }
-
-    if (!isAuthenticated) {
-      clearGuestScans();
-      toast.success("Guest history cleared successfully!");
-      setShowClearConfirm(false);
-      setScans([]);
-      return;
-    }
-
-    setClearingAll(true);
-    try {
-      for (const scan of scans) {
-        if (scan.reference) {
-          await deleteScanByReference(scan.reference);
-        }
-      }
-      toast.success("All scan history cleared successfully!");
-      setShowClearConfirm(false);
-      await fetchHistory();
-    } catch (error) {
-      console.error("Clear History Error:", error);
-      toast.error(error.message || "Failed to clear history");
-      setShowClearConfirm(false);
-    } finally {
-      setClearingAll(false);
     }
   };
 
@@ -393,7 +332,7 @@ const History = () => {
     let filtered = getDateFilteredScans(scans);
 
     if (filter !== "all") {
-      filtered = filtered.filter(s => s.type === filter);
+      filtered = filtered.filter((s) => s.type === filter);
     }
 
     if (searchTerm.trim()) {
@@ -407,7 +346,6 @@ const History = () => {
     return <LoadingSpinner text="Loading security history..." />;
   }
 
-  // Guest mode empty state
   if (!isAuthenticated && scans.length === 0) {
     return (
       <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "40px 24px" }}>
@@ -453,18 +391,43 @@ const History = () => {
           >
             <FaShieldAlt style={{ fontSize: "48px", color: "#667eea" }} />
           </div>
-          <h2 style={{ fontSize: "28px", fontWeight: "700", color: "#1e293b", marginBottom: "12px" }}>
+          <h2
+            style={{
+              fontSize: "28px",
+              fontWeight: "700",
+              color: "#1e293b",
+              marginBottom: "12px",
+            }}
+          >
             No Scans Yet
           </h2>
-          <p style={{ fontSize: "16px", color: "#64748b", maxWidth: "480px", margin: "0 auto 8px" }}>
-            You haven't performed any scans yet. Start scanning URLs and messages to see results here.
+          <p
+            style={{
+              fontSize: "16px",
+              color: "#64748b",
+              maxWidth: "480px",
+              margin: "0 auto 8px",
+            }}
+          >
+            You haven't performed any scans yet. Start scanning URLs and messages
+            to see results here.
           </p>
-          <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "24px" }}>
-            Sign up to save your scan history permanently and access it from any device.
+          <p
+            style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "24px" }}
+          >
+            Sign up to save your scan history permanently and access it from any
+            device.
           </p>
-          <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "12px",
+              justifyContent: "center",
+              flexWrap: "wrap",
+            }}
+          >
             <button
-              onClick={() => window.location.href = "/url-scan"}
+              onClick={() => (window.location.href = "/url-scan")}
               style={{
                 padding: "12px 28px",
                 background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -550,7 +513,7 @@ const History = () => {
             >
               <FaInfoCircle style={{ color: "#d97706" }} />
               <span style={{ fontSize: "14px", color: "#92400e" }}>
-                Guest Mode • History is temporary and will be lost on browser refresh
+                Guest Mode • History is temporary
               </span>
               <button
                 onClick={() => setShowAuthModal(true)}
@@ -570,41 +533,9 @@ const History = () => {
               </button>
             </div>
           )}
-
-          {scans.length > 0 && isAuthenticated && (
-            <button
-              onClick={() => setShowClearConfirm(true)}
-              style={{
-                marginTop: "16px",
-                padding: "10px 24px",
-                background: "#ef4444",
-                color: "white",
-                border: "none",
-                borderRadius: "12px",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                fontWeight: "600",
-                fontSize: "14px",
-                transition: "all 0.3s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#dc2626";
-                e.currentTarget.style.transform = "scale(1.02)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#ef4444";
-                e.currentTarget.style.transform = "scale(1)";
-              }}
-            >
-              <FaTrash size={14} />
-              Clear All ({scans.length})
-            </button>
-          )}
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Removed Avg Risk Score */}
         <div
           style={{
             display: "grid",
@@ -621,7 +552,9 @@ const History = () => {
               boxShadow: "0 4px 6px rgba(0,0,0,0.05)",
             }}
           >
-            <FaChartLine style={{ fontSize: "32px", color: "#667eea", marginBottom: "12px" }} />
+            <FaChartLine
+              style={{ fontSize: "32px", color: "#667eea", marginBottom: "12px" }}
+            />
             <div style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}>
               {stats.total}
             </div>
@@ -636,7 +569,9 @@ const History = () => {
               boxShadow: "0 4px 6px rgba(0,0,0,0.05)",
             }}
           >
-            <FaLink style={{ fontSize: "32px", color: "#3b82f6", marginBottom: "12px" }} />
+            <FaLink
+              style={{ fontSize: "32px", color: "#3b82f6", marginBottom: "12px" }}
+            />
             <div style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}>
               {stats.url}
             </div>
@@ -651,26 +586,13 @@ const History = () => {
               boxShadow: "0 4px 6px rgba(0,0,0,0.05)",
             }}
           >
-            <FaEnvelope style={{ fontSize: "32px", color: "#f5576c", marginBottom: "12px" }} />
+            <FaEnvelope
+              style={{ fontSize: "32px", color: "#f5576c", marginBottom: "12px" }}
+            />
             <div style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}>
               {stats.message}
             </div>
             <div style={{ fontSize: "14px", color: "#64748b" }}>Message Scans</div>
-          </div>
-          <div
-            style={{
-              background: "white",
-              borderRadius: "20px",
-              padding: "20px",
-              textAlign: "center",
-              boxShadow: "0 4px 6px rgba(0,0,0,0.05)",
-            }}
-          >
-            <FaShieldAlt style={{ fontSize: "32px", color: "#10b981", marginBottom: "12px" }} />
-            <div style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}>
-              {stats.avgRisk.toFixed(1)}%
-            </div>
-            <div style={{ fontSize: "14px", color: "#64748b" }}>Avg Risk Score</div>
           </div>
         </div>
       </div>
@@ -701,7 +623,11 @@ const History = () => {
                 transition: "all 0.3s ease",
               }}
             >
-              {type === "all" ? "All Scans" : type === "url" ? "URL Scans" : "Message Scans"}
+              {type === "all"
+                ? "All Scans"
+                : type === "url"
+                ? "URL Scans"
+                : "Message Scans"}
             </button>
           ))}
         </div>
@@ -838,8 +764,10 @@ const History = () => {
                 onClick={() => handleDatePresetChange(preset.value)}
                 style={{
                   padding: "8px 16px",
-                  background: dateFilter.preset === preset.value ? "#667eea" : "#f1f5f9",
-                  color: dateFilter.preset === preset.value ? "white" : "#475569",
+                  background:
+                    dateFilter.preset === preset.value ? "#667eea" : "#f1f5f9",
+                  color:
+                    dateFilter.preset === preset.value ? "white" : "#475569",
                   border: "none",
                   borderRadius: "10px",
                   cursor: "pointer",
@@ -980,7 +908,9 @@ const History = () => {
         <span>
           Showing {filteredScans.length} of {scans.length} scans
           {searchTerm && (
-            <span style={{ marginLeft: "8px", fontWeight: "600", color: "#667eea" }}>
+            <span
+              style={{ marginLeft: "8px", fontWeight: "600", color: "#667eea" }}
+            >
               (filtered by "{searchTerm}")
             </span>
           )}
@@ -1011,22 +941,54 @@ const History = () => {
                   borderBottom: "1px solid #e2e8f0",
                 }}
               >
-                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
+                <th
+                  style={{
+                    padding: "20px",
+                    textAlign: "left",
+                    fontWeight: "600",
+                    color: "#475569",
+                  }}
+                >
                   Reference
                 </th>
-                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
+                <th
+                  style={{
+                    padding: "20px",
+                    textAlign: "left",
+                    fontWeight: "600",
+                    color: "#475569",
+                  }}
+                >
                   Content
                 </th>
-                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
+                <th
+                  style={{
+                    padding: "20px",
+                    textAlign: "left",
+                    fontWeight: "600",
+                    color: "#475569",
+                  }}
+                >
                   Prediction
                 </th>
-                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
-                  Risk Score
-                </th>
-                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
+                <th
+                  style={{
+                    padding: "20px",
+                    textAlign: "left",
+                    fontWeight: "600",
+                    color: "#475569",
+                  }}
+                >
                   Date
                 </th>
-                <th style={{ padding: "20px", textAlign: "left", fontWeight: "600", color: "#475569" }}>
+                <th
+                  style={{
+                    padding: "20px",
+                    textAlign: "left",
+                    fontWeight: "600",
+                    color: "#475569",
+                  }}
+                >
                   Actions
                 </th>
               </tr>
@@ -1034,8 +996,17 @@ const History = () => {
             <tbody>
               {filteredScans.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: "center", padding: "80px", color: "#94a3b8" }}>
-                    <FaShieldAlt style={{ fontSize: "48px", marginBottom: "16px", opacity: 0.5 }} />
+                  <td
+                    colSpan="5"
+                    style={{ textAlign: "center", padding: "80px", color: "#94a3b8" }}
+                  >
+                    <FaShieldAlt
+                      style={{
+                        fontSize: "48px",
+                        marginBottom: "16px",
+                        opacity: 0.5,
+                      }}
+                    />
                     <p>No scans found.</p>
                     {searchTerm && (
                       <button
@@ -1063,7 +1034,7 @@ const History = () => {
                   const isDeleting = deletingId === reference;
                   const isGuest = scan?.isGuest === true;
                   const prediction = scan?.prediction || "UNKNOWN";
-                  
+
                   const getPredictionColor = (pred) => {
                     switch (pred?.toUpperCase()) {
                       case "PHISHING":
@@ -1091,29 +1062,49 @@ const History = () => {
                         transition: "background 0.3s",
                         ...(isGuest ? { background: "#f8fafc" } : {}),
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = isGuest ? "#f8fafc" : "white")}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background = "#f8fafc")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.background = isGuest
+                          ? "#f8fafc"
+                          : "white")
+                      }
                     >
-                      <td style={{ padding: "16px 20px", fontWeight: "600", color: "#667eea", fontSize: "13px", fontFamily: "monospace" }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <td
+                        style={{
+                          padding: "16px 20px",
+                          fontWeight: "600",
+                          color: "#667eea",
+                          fontSize: "13px",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        <span
+                          style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                        >
                           <FaHashtag size={10} style={{ opacity: 0.5 }} />
                           {reference ? truncateText(reference, 20) : "N/A"}
                           {isGuest && (
-                            <span style={{
-                              marginLeft: "8px",
-                              fontSize: "9px",
-                              background: "#94a3b8",
-                              color: "white",
-                              padding: "1px 8px",
-                              borderRadius: "4px",
-                              fontWeight: "500",
-                            }}>
+                            <span
+                              style={{
+                                marginLeft: "8px",
+                                fontSize: "9px",
+                                background: "#94a3b8",
+                                color: "white",
+                                padding: "1px 8px",
+                                borderRadius: "4px",
+                                fontWeight: "500",
+                              }}
+                            >
                               Guest
                             </span>
                           )}
                         </span>
                       </td>
-                      <td style={{ padding: "16px 20px", maxWidth: "300px" }}>
+                      <td
+                        style={{ padding: "16px 20px", maxWidth: "300px" }}
+                      >
                         <div
                           style={{
                             overflow: "hidden",
@@ -1140,41 +1131,23 @@ const History = () => {
                           {prediction}
                         </span>
                       </td>
-                      <td style={{ padding: "16px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <div style={{ flex: 1, width: "100px" }}>
-                            <div
-                              style={{
-                                width: "100%",
-                                height: "6px",
-                                background: "#e2e8f0",
-                                borderRadius: "3px",
-                                overflow: "hidden",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${scan?.riskScore || 0}%`,
-                                  height: "100%",
-                                  background:
-                                    (scan?.riskScore || 0) > 70
-                                      ? "#ef4444"
-                                      : (scan?.riskScore || 0) > 30
-                                      ? "#f59e0b"
-                                      : "#10b981",
-                                }}
-                              ></div>
-                            </div>
-                          </div>
-                          <span style={{ fontWeight: "600", minWidth: "45px" }}>
-                            {scan?.riskScore || 0}%
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "16px 20px", color: "#64748b", fontSize: "14px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <td
+                        style={{
+                          padding: "16px 20px",
+                          color: "#64748b",
+                          fontSize: "14px",
+                        }}
+                      >
+                        <div
+                          style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                        >
                           <FaCalendar size={12} />
-                          {formatDate(scan?.scannedAt || scan?.date || scan?.timestamp || Date.now())}
+                          {formatDate(
+                            scan?.scannedAt ||
+                              scan?.date ||
+                              scan?.timestamp ||
+                              Date.now()
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: "16px 20px" }}>
@@ -1191,7 +1164,11 @@ const History = () => {
                               borderRadius: "8px",
                               transition: "background 0.3s",
                             }}
-                            title={isAuthenticated ? "View details" : "Sign in to view details"}
+                            title={
+                              isAuthenticated
+                                ? "View details"
+                                : "Sign in to view details"
+                            }
                           >
                             <FaEye />
                           </button>
@@ -1201,8 +1178,15 @@ const History = () => {
                             style={{
                               background: "none",
                               border: "none",
-                              color: isDownloading ? "#94a3b8" : isAuthenticated ? "#64748b" : "#94a3b8",
-                              cursor: isDownloading || !isAuthenticated ? "not-allowed" : "pointer",
+                              color: isDownloading
+                                ? "#94a3b8"
+                                : isAuthenticated
+                                ? "#64748b"
+                                : "#94a3b8",
+                              cursor:
+                                isDownloading || !isAuthenticated
+                                  ? "not-allowed"
+                                  : "pointer",
                               padding: "6px",
                               borderRadius: "8px",
                               transition: "all 0.3s",
@@ -1210,7 +1194,11 @@ const History = () => {
                               alignItems: "center",
                               gap: "4px",
                             }}
-                            title={isAuthenticated ? "Download report" : "Sign in to download report"}
+                            title={
+                              isAuthenticated
+                                ? "Download report"
+                                : "Sign in to download report"
+                            }
                           >
                             {isDownloading ? (
                               <FaSpinner className="spinning" size={14} />
@@ -1224,8 +1212,15 @@ const History = () => {
                             style={{
                               background: "none",
                               border: "none",
-                              color: isDeleting ? "#94a3b8" : isAuthenticated ? "#ef4444" : "#94a3b8",
-                              cursor: isDeleting || !isAuthenticated ? "not-allowed" : "pointer",
+                              color: isDeleting
+                                ? "#94a3b8"
+                                : isAuthenticated
+                                ? "#ef4444"
+                                : "#94a3b8",
+                              cursor:
+                                isDeleting || !isAuthenticated
+                                  ? "not-allowed"
+                                  : "pointer",
                               padding: "6px",
                               borderRadius: "8px",
                               transition: "all 0.3s",
@@ -1233,7 +1228,11 @@ const History = () => {
                               alignItems: "center",
                               gap: "4px",
                             }}
-                            title={isAuthenticated ? "Delete scan" : "Sign in to delete"}
+                            title={
+                              isAuthenticated
+                                ? "Delete scan"
+                                : "Sign in to delete"
+                            }
                           >
                             {isDeleting ? (
                               <FaSpinner className="spinning" size={14} />
@@ -1251,117 +1250,6 @@ const History = () => {
           </table>
         </div>
       </div>
-
-      {/* Clear All Confirmation Modal */}
-      {showClearConfirm && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.6)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
-            padding: "20px",
-          }}
-          onClick={() => {
-            if (!clearingAll) {
-              setShowClearConfirm(false);
-            }
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              borderRadius: "24px",
-              padding: "32px",
-              maxWidth: "420px",
-              width: "100%",
-              textAlign: "center",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                width: "80px",
-                height: "80px",
-                background: "#fee",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 20px",
-              }}
-            >
-              <FaExclamationTriangle style={{ fontSize: "40px", color: "#ef4444" }} />
-            </div>
-            <h3 style={{ fontSize: "24px", fontWeight: "700", color: "#1e293b", marginBottom: "12px" }}>
-              Clear All History?
-            </h3>
-            <p style={{ color: "#64748b", marginBottom: "8px" }}>
-              This action cannot be undone. All {scans.length} scan records will be permanently deleted.
-            </p>
-            {!isAuthenticated && (
-              <p style={{ color: "#d97706", fontSize: "14px", marginBottom: "24px", background: "#fef3c7", padding: "8px", borderRadius: "8px" }}>
-                ⚠️ Guest mode: Only temporary scans will be cleared.
-              </p>
-            )}
-            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                disabled={clearingAll}
-                style={{
-                  padding: "12px 28px",
-                  background: "#f1f5f9",
-                  color: "#475569",
-                  border: "none",
-                  borderRadius: "12px",
-                  cursor: clearingAll ? "not-allowed" : "pointer",
-                  fontWeight: "600",
-                  transition: "all 0.3s ease",
-                  opacity: clearingAll ? 0.6 : 1,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleClearAllHistory}
-                disabled={clearingAll}
-                style={{
-                  padding: "12px 28px",
-                  background: clearingAll ? "#94a3b8" : "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  cursor: clearingAll ? "not-allowed" : "pointer",
-                  fontWeight: "600",
-                  transition: "all 0.3s ease",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                {clearingAll ? (
-                  <>
-                    <FaSpinner className="spinning" />
-                    <span>Clearing...</span>
-                  </>
-                ) : (
-                  <>
-                    <FaTrash />
-                    <span>Yes, Clear All</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Details Modal */}
       {showModal && selectedScan && (
@@ -1406,7 +1294,9 @@ const History = () => {
                 alignItems: "center",
               }}
             >
-              <h2 style={{ fontSize: "24px", fontWeight: "700", color: "#1e293b" }}>
+              <h2
+                style={{ fontSize: "24px", fontWeight: "700", color: "#1e293b" }}
+              >
                 Scan Details
               </h2>
               <button
@@ -1429,35 +1319,82 @@ const History = () => {
             <div style={{ padding: "32px" }}>
               {/* Reference */}
               <div style={{ marginBottom: "24px" }}>
-                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#64748b",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                  }}
+                >
                   Reference
                 </h3>
-                <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: "12px", color: "#1e293b", fontFamily: "monospace", fontSize: "14px" }}>
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    color: "#1e293b",
+                    fontFamily: "monospace",
+                    fontSize: "14px",
+                  }}
+                >
                   {selectedScan.reference}
                 </div>
               </div>
 
               {/* URL */}
               <div style={{ marginBottom: "24px" }}>
-                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#64748b",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                  }}
+                >
                   URL
                 </h3>
-                <div style={{ background: "#f8fafc", padding: "12px 16px", borderRadius: "12px", color: "#1e293b", wordBreak: "break-all" }}>
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    color: "#1e293b",
+                    wordBreak: "break-all",
+                  }}
+                >
                   {selectedScan.url}
                 </div>
               </div>
 
               {/* Prediction */}
               <div style={{ marginBottom: "24px" }}>
-                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#64748b",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                  }}
+                >
                   Prediction
                 </h3>
                 <div
                   style={{
                     padding: "12px 16px",
                     borderRadius: "12px",
-                    background: selectedScan.prediction === "PHISHING" ? "#fee2e2" : "#d1fae5",
-                    color: selectedScan.prediction === "PHISHING" ? "#dc2626" : "#065f46",
+                    background:
+                      selectedScan.prediction === "PHISHING"
+                        ? "#fee2e2"
+                        : "#d1fae5",
+                    color:
+                      selectedScan.prediction === "PHISHING"
+                        ? "#dc2626"
+                        : "#065f46",
                     fontWeight: "600",
                   }}
                 >
@@ -1466,59 +1403,127 @@ const History = () => {
               </div>
 
               {/* Phishing Reasons */}
-              {selectedScan.phishingReasons && selectedScan.phishingReasons.length > 0 && (
-                <div style={{ marginBottom: "24px" }}>
-                  <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
-                    🚨 Phishing Indicators
-                  </h3>
-                  <div style={{ padding: "16px", background: "#fee2e2", borderRadius: "12px", color: "#dc2626" }}>
-                    <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                      {Array.isArray(selectedScan.phishingReasons) 
-                        ? selectedScan.phishingReasons.map((reason, i) => (
-                            <li key={i} style={{ marginBottom: "4px" }}>{reason}</li>
-                          ))
-                        : <li>{selectedScan.phishingReasons}</li>
-                      }
-                    </ul>
+              {selectedScan.phishingReasons &&
+                selectedScan.phishingReasons.length > 0 && (
+                  <div style={{ marginBottom: "24px" }}>
+                    <h3
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#64748b",
+                        marginBottom: "8px",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      🚨 Phishing Indicators
+                    </h3>
+                    <div
+                      style={{
+                        padding: "16px",
+                        background: "#fee2e2",
+                        borderRadius: "12px",
+                        color: "#dc2626",
+                      }}
+                    >
+                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                        {Array.isArray(selectedScan.phishingReasons)
+                          ? selectedScan.phishingReasons.map((reason, i) => (
+                              <li key={i} style={{ marginBottom: "4px" }}>
+                                {reason}
+                              </li>
+                            ))
+                          : selectedScan.phishingReasons}
+                      </ul>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* Legitimate Reasons */}
-              {selectedScan.legitimateReasons && selectedScan.legitimateReasons.length > 0 && (
-                <div style={{ marginBottom: "24px" }}>
-                  <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
-                    ✅ Legitimate Indicators
-                  </h3>
-                  <div style={{ padding: "16px", background: "#d1fae5", borderRadius: "12px", color: "#065f46" }}>
-                    <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                      {Array.isArray(selectedScan.legitimateReasons) 
-                        ? selectedScan.legitimateReasons.map((reason, i) => (
-                            <li key={i} style={{ marginBottom: "4px" }}>{reason}</li>
-                          ))
-                        : <li>{selectedScan.legitimateReasons}</li>
-                      }
-                    </ul>
+              {selectedScan.legitimateReasons &&
+                selectedScan.legitimateReasons.length > 0 && (
+                  <div style={{ marginBottom: "24px" }}>
+                    <h3
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: "#64748b",
+                        marginBottom: "8px",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      ✅ Legitimate Indicators
+                    </h3>
+                    <div
+                      style={{
+                        padding: "16px",
+                        background: "#d1fae5",
+                        borderRadius: "12px",
+                        color: "#065f46",
+                      }}
+                    >
+                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                        {Array.isArray(selectedScan.legitimateReasons)
+                          ? selectedScan.legitimateReasons.map((reason, i) => (
+                              <li key={i} style={{ marginBottom: "4px" }}>
+                                {reason}
+                              </li>
+                            ))
+                          : selectedScan.legitimateReasons}
+                      </ul>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* Conclusion */}
               <div style={{ marginBottom: "24px" }}>
-                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#64748b",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                  }}
+                >
                   Conclusion
                 </h3>
-                <div style={{ padding: "16px", background: "#f8fafc", borderRadius: "12px", color: "#475569", lineHeight: "1.7" }}>
+                <div
+                  style={{
+                    padding: "16px",
+                    background: "#f8fafc",
+                    borderRadius: "12px",
+                    color: "#475569",
+                    lineHeight: "1.7",
+                  }}
+                >
                   {selectedScan.conclusion}
                 </div>
               </div>
 
               {/* Timestamp */}
               <div style={{ marginBottom: "24px" }}>
-                <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", marginBottom: "8px", textTransform: "uppercase" }}>
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#64748b",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                  }}
+                >
                   Scanned At
                 </h3>
-                <div style={{ padding: "12px 16px", background: "#f8fafc", borderRadius: "12px", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    background: "#f8fafc",
+                    borderRadius: "12px",
+                    color: "#64748b",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
                   <FaCalendar />
                   {formatDate(selectedScan.scannedAt)}
                 </div>
@@ -1532,13 +1537,19 @@ const History = () => {
                   style={{
                     width: "100%",
                     padding: "14px",
-                    background: downloadingId === selectedScan.reference ? "#94a3b8" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    background:
+                      downloadingId === selectedScan.reference
+                        ? "#94a3b8"
+                        : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                     color: "white",
                     border: "none",
                     borderRadius: "12px",
                     fontSize: "16px",
                     fontWeight: "600",
-                    cursor: downloadingId === selectedScan.reference ? "not-allowed" : "pointer",
+                    cursor:
+                      downloadingId === selectedScan.reference
+                        ? "not-allowed"
+                        : "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",

@@ -468,7 +468,7 @@ const Footer = () => {
                   >
                     <FaPhone style={{ color: "#667eea", fontSize: "11px" }} />
                   </div>
-                  <span>+977 1-1234567</span>
+                  <span>+977 9844330051</span>
                 </div>
                 <div
                   style={{

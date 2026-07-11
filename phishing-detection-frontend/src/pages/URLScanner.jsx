@@ -1,7 +1,7 @@
 // pages/URLScanner.jsx
 import React, { useState } from "react";
 import { scanURL, submitFeedback, getScanByReference } from "../services/api";
-import { validateURL } from "../utils/validators";
+// import { validateURL } from "../utils/validators";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
 import AuthModal from "../components/common/AuthModal";
@@ -18,13 +18,6 @@ import {
   FaThumbsUp,
   FaThumbsDown,
   FaSpinner,
-  FaLock,
-  FaUnlock,
-  FaServer,
-  FaCode,
-  FaUserSecret,
-  FaCheck,
-  FaTimes,
   FaUserPlus,
   FaExclamationCircle,
   FaWifi,
@@ -101,54 +94,28 @@ const URLScanner = () => {
         resultType = "unknown";
     }
 
-    const features = extractURLFeatures(scannedUrl);
-
     return {
       reference: response.reference,
       url: response.url || scannedUrl,
       prediction: response.prediction,
       classification: response.prediction || "UNKNOWN",
       riskScore: riskScore,
-      confidence: 0.85,
+      // confidence: 0.85,
       explanation: response.conclusion || "Analysis completed",
       result: resultType,
-      features: features,
       scannedAt: response.scannedAt || new Date().toISOString(),
     };
-  };
-
-  const extractURLFeatures = (url) => {
-    try {
-      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
-      return {
-        urlLength: url.length,
-        hasHTTPS: urlObj.protocol === "https:",
-        hasIP: /^\d+\.\d+\.\d+\.\d+$/.test(urlObj.hostname),
-        specialChars: (url.match(/[^a-zA-Z0-9:/.]/g) || []).length,
-        hasSuspiciousKeywords: /(login|verify|account|secure|bank|paypal|confirm|update|password|credential)/i.test(url),
-        domain: urlObj.hostname,
-      };
-    } catch {
-      return {
-        urlLength: url.length,
-        hasHTTPS: url.startsWith("https://"),
-        hasIP: false,
-        specialChars: 0,
-        hasSuspiciousKeywords: false,
-        domain: "unknown",
-      };
-    }
   };
 
   const handleScan = async (e) => {
     e.preventDefault();
 
-    const validation = validateURL(url);
-    if (!validation.isValid) {
-      toast.error(validation.error);
-      setError(validation.error);
-      return;
-    }
+    // const validation = validateURL(url);
+    // if (!validation.isValid) {
+    //   toast.error(validation.error);
+    //   setError(validation.error);
+    //   return;
+    // }
 
     setLoading(true);
     setError(null);
@@ -565,16 +532,16 @@ const URLScanner = () => {
 
       {error && !connectionError && (
         <div
-          style={{
-            background: "#fee",
-            borderLeft: "4px solid #ef4444",
-            padding: "16px 20px",
-            borderRadius: "12px",
-            marginBottom: "24px",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-          }}
+          // style={{
+          //   background: "#fee",
+          //   borderLeft: "4px solid #ef4444",
+          //   padding: "16px 20px",
+          //   borderRadius: "12px",
+          //   marginBottom: "24px",
+          //   display: "flex",
+          //   alignItems: "center",
+          //   gap: "12px",
+          // }}
         >
           <FaExclamationTriangle style={{ color: "#ef4444", fontSize: "20px" }} />
           <p style={{ color: "#dc2626", margin: 0 }}>{error}</p>
@@ -609,202 +576,7 @@ const URLScanner = () => {
                 transform: "translate(100px, -100px)",
               }}
             />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "20px",
-                position: "relative",
-                zIndex: 1,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontSize: "28px" }}>{riskLevel.icon}</span>
-                  <span
-                    style={{
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      color: riskLevel.color,
-                      background: riskLevel.bg,
-                      padding: "4px 16px",
-                      borderRadius: "100px",
-                    }}
-                  >
-                    {riskLevel.badge}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "13px",
-                      fontWeight: "500",
-                      color: "#94a3b8",
-                    }}
-                  >
-                    Risk Assessment
-                  </span>
-                  {result.reference && (
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "400",
-                        color: "#94a3b8",
-                        background: "#f1f5f9",
-                        padding: "2px 12px",
-                        borderRadius: "4px",
-                      }}
-                    >
-                      Ref: {result.reference}
-                    </span>
-                  )}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    gap: "16px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "56px",
-                      fontWeight: "800",
-                      color: riskLevel.color,
-                      lineHeight: 1,
-                    }}
-                  >
-                    {Math.round(result.riskScore)}%
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "600",
-                      color: riskLevel.color,
-                    }}
-                  >
-                    {riskLevel.label}
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <button
-                  onClick={handleDownloadReport}
-                  disabled={downloading}
-                  style={{
-                    background: riskLevel.color,
-                    color: "white",
-                    padding: "14px 28px",
-                    border: "none",
-                    borderRadius: "14px",
-                    cursor: downloading ? "not-allowed" : "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    fontWeight: "600",
-                    fontSize: "15px",
-                    transition: "all 0.3s ease",
-                    opacity: downloading ? 0.6 : 1,
-                    boxShadow: `0 4px 16px ${riskLevel.color}40`,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!downloading) {
-                      e.currentTarget.style.transform = "scale(1.02)";
-                      e.currentTarget.style.boxShadow = `0 6px 24px ${riskLevel.color}50`;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!downloading) {
-                      e.currentTarget.style.transform = "scale(1)";
-                      e.currentTarget.style.boxShadow = `0 4px 16px ${riskLevel.color}40`;
-                    }
-                  }}
-                >
-                  {downloading ? (
-                    <>
-                      <FaSpinner className="spinning" />
-                      <span>Downloading...</span>
-                    </>
-                  ) : !isAuthenticated ? (
-                    <>
-                      <FaUserPlus />
-                      <span>Sign in to Download</span>
-                    </>
-                  ) : (
-                    <>
-                      <FaFilePdf />
-                      <span>Download Report</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div style={{ marginTop: "20px", position: "relative", zIndex: 1 }}>
-              <div
-                style={{
-                  width: "100%",
-                  height: "8px",
-                  background: "#f1f5f9",
-                  borderRadius: "4px",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${result.riskScore}%`,
-                    height: "100%",
-                    background: `linear-gradient(90deg, ${riskLevel.color}80, ${riskLevel.color})`,
-                    borderRadius: "4px",
-                    transition: "width 1s ease",
-                  }}
-                />
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginTop: "8px",
-                  fontSize: "12px",
-                  color: "#94a3b8",
-                }}
-              >
-                <span>Low Risk (0%)</span>
-                <span>Medium (50%)</span>
-                <span>High Risk (100%)</span>
-              </div>
-            </div>
-
-            <p
-              style={{
-                marginTop: "16px",
-                fontSize: "15px",
-                color: riskLevel.color,
-                fontWeight: "500",
-                position: "relative",
-                zIndex: 1,
-              }}
-            >
-              {result.riskScore > 70
-                ? "🚫 HIGH RISK: This website appears to be a phishing site! Do not proceed."
-                : result.riskScore > 30
-                ? "⚠️ MEDIUM RISK: This website shows suspicious characteristics. Exercise caution."
-                : "✅ LOW RISK: This website appears to be safe."}
-            </p>
-          </div>
-
-          {/* Classification Card */}
-          <div
+             <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
@@ -895,20 +667,20 @@ const URLScanner = () => {
                 }}
               >
                 <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "6px 14px",
-                    background: `${riskLevel.color}15`,
-                    borderRadius: "8px",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: riskLevel.color,
-                  }}
+                  // style={{
+                  //   display: "inline-flex",
+                  //   alignItems: "center",
+                  //   gap: "6px",
+                  //   padding: "6px 14px",
+                  //   background: `${riskLevel.color}15`,
+                  //   borderRadius: "8px",
+                  //   fontSize: "13px",
+                  //   fontWeight: "600",
+                  //   color: riskLevel.color,
+                  // }}
                 >
-                  <FaCheckCircle size={14} />
-                  Confidence: {((result.confidence || 0.85) * 100).toFixed(1)}%
+                  {/* <FaCheckCircle size={14} /> */}
+                  {/* Confidence: {((result.confidence || 0.85) * 100).toFixed(1)}% */}
                 </div>
                 {result.reference && (
                   <div
@@ -1007,375 +779,201 @@ const URLScanner = () => {
             </div>
           </div>
 
-          {/* Technical Analysis */}
-          {result.features && (
             <div
               style={{
-                background: "white",
-                borderRadius: "20px",
-                padding: "28px",
-                marginBottom: "32px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
-                border: "1px solid #f1f5f9",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "20px",
+                position: "relative",
+                zIndex: 1,
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  marginBottom: "24px",
-                }}
-              >
+              <div>
                 <div
                   style={{
-                    width: "48px",
-                    height: "48px",
-                    background:
-                      "linear-gradient(135deg, #06b6d420 0%, #3b82f620 100%)",
-                    borderRadius: "14px",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "20px",
+                    gap: "12px",
+                    marginBottom: "8px",
                   }}
                 >
-                  🔍
-                </div>
-                <div>
-                  <h3
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "700",
-                      color: "#1e293b",
-                      margin: 0,
-                    }}
+                  <span style={{ fontSize: "28px" }}>{riskLevel.icon}</span>
+                  <span
+                    // style={{
+                    //   fontSize: "14px",
+                    //   fontWeight: "600",
+                    //   color: riskLevel.color,
+                    //   background: riskLevel.bg,
+                    //   padding: "4px 16px",
+                    //   borderRadius: "100px",
+                    // }}
                   >
-                    Technical Analysis
-                  </h3>
-                  <p
+                    {/* {riskLevel.badge} */}
+                  </span>
+                  <span
                     style={{
                       fontSize: "13px",
+                      fontWeight: "500",
                       color: "#94a3b8",
-                      margin: 0,
                     }}
                   >
-                    Detailed URL Features
-                  </p>
+                    {/* Risk Assessment */}
+                  </span>
+                  {result.reference && (
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "400",
+                        color: "#94a3b8",
+                        background: "#f1f5f9",
+                        padding: "2px 12px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      {/* Ref: {result.reference} */}
+                    </span>
+                  )}
+                </div>
+                <div
+                  // style={{
+                  //   display: "flex",
+                  //   alignItems: "baseline",
+                  //   gap: "16px",
+                  // }}
+                >
+                  <span
+                    // style={{
+                    //   fontSize: "56px",
+                    //   fontWeight: "800",
+                    //   color: riskLevel.color,
+                    //   lineHeight: 1,
+                    // }}
+                  >
+                    {/* {Math.round(result.riskScore)}% */}
+                  </span>
+                  <span
+                    // style={{
+                    //   fontSize: "18px",
+                    //   fontWeight: "600",
+                    //   color: riskLevel.color,
+                    // }}
+                  >
+                    {/* {riskLevel.label} */}
+                  </span>
                 </div>
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: "12px",
-                }}
-              >
-                {/* URL Length */}
-                <div
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <button
+                  onClick={handleDownloadReport}
+                  disabled={downloading}
                   style={{
+                    background: riskLevel.color,
+                    color: "white",
+                    padding: "14px 28px",
+                    border: "none",
+                    borderRadius: "14px",
+                    cursor: downloading ? "not-allowed" : "pointer",
                     display: "flex",
                     alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: "#f8fafc",
-                    borderRadius: "12px",
-                    border: "1px solid #f1f5f9",
+                    gap: "10px",
+                    fontWeight: "600",
+                    fontSize: "15px",
+                    transition: "all 0.3s ease",
+                    opacity: downloading ? 0.6 : 1,
+                    boxShadow: `0 4px 16px ${riskLevel.color}40`,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!downloading) {
+                      e.currentTarget.style.transform = "scale(1.02)";
+                      e.currentTarget.style.boxShadow = `0 6px 24px ${riskLevel.color}50`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!downloading) {
+                      e.currentTarget.style.transform = "scale(1)";
+                      e.currentTarget.style.boxShadow = `0 4px 16px ${riskLevel.color}40`;
+                    }
                   }}
                 >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: "#e0f2fe",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#0ea5e9",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaLink />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      URL Length
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: "#1e293b",
-                      }}
-                    >
-                      {result.features.urlLength || "N/A"}
-                    </div>
-                  </div>
-                </div>
-
-                {/* HTTPS Usage */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: result.features.hasHTTPS ? "#ecfdf5" : "#fef2f2",
-                    borderRadius: "12px",
-                    border: `1px solid ${
-                      result.features.hasHTTPS ? "#6ee7b7" : "#fca5a5"
-                    }`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: result.features.hasHTTPS ? "#d1fae5" : "#fee2e2",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: result.features.hasHTTPS ? "#10b981" : "#ef4444",
-                      fontSize: "16px",
-                    }}
-                  >
-                    {result.features.hasHTTPS ? <FaLock /> : <FaUnlock />}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      HTTPS Usage
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: result.features.hasHTTPS ? "#10b981" : "#ef4444",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      {result.features.hasHTTPS ? (
-                        <>
-                          <FaCheck size={14} /> Secure
-                        </>
-                      ) : (
-                        <>
-                          <FaTimes size={14} /> Not Secure
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Special Characters */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: "#f8fafc",
-                    borderRadius: "12px",
-                    border: "1px solid #f1f5f9",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: "#fef3c7",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#f59e0b",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaCode />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Special Characters
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: "#1e293b",
-                      }}
-                    >
-                      {result.features.specialChars || 0}
-                    </div>
-                  </div>
-                </div>
-
-                {/* IP Address */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: result.features.hasIP ? "#fef2f2" : "#ecfdf5",
-                    borderRadius: "12px",
-                    border: `1px solid ${
-                      result.features.hasIP ? "#fca5a5" : "#6ee7b7"
-                    }`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: result.features.hasIP ? "#fee2e2" : "#d1fae5",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: result.features.hasIP ? "#ef4444" : "#10b981",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaServer />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      IP Address
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: result.features.hasIP ? "#ef4444" : "#10b981",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      {result.features.hasIP ? (
-                        <>
-                          <FaExclamationTriangle size={14} /> Detected
-                        </>
-                      ) : (
-                        <>
-                          <FaCheck size={14} /> Not Detected
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Suspicious Keywords */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: result.features.hasSuspiciousKeywords
-                      ? "#fef2f2"
-                      : "#ecfdf5",
-                    borderRadius: "12px",
-                    border: `1px solid ${
-                      result.features.hasSuspiciousKeywords ? "#fca5a5" : "#6ee7b7"
-                    }`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: result.features.hasSuspiciousKeywords
-                        ? "#fee2e2"
-                        : "#d1fae5",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: result.features.hasSuspiciousKeywords
-                        ? "#ef4444"
-                        : "#10b981",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaUserSecret />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Suspicious Keywords
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: result.features.hasSuspiciousKeywords
-                          ? "#ef4444"
-                          : "#10b981",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      {result.features.hasSuspiciousKeywords ? (
-                        <>
-                          <FaExclamationTriangle size={14} /> Found
-                        </>
-                      ) : (
-                        <>
-                          <FaCheck size={14} /> Not Found
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                  {downloading ? (
+                    <>
+                      <FaSpinner className="spinning" />
+                      <span>Downloading...</span>
+                    </>
+                  ) : !isAuthenticated ? (
+                    <>
+                      <FaUserPlus />
+                      <span>Sign in to Download</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaFilePdf />
+                      <span>Download Report</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-          )}
+
+            {/* Progress Bar */}
+            <div style={{ marginTop: "20px", position: "relative", zIndex: 1 }}>
+              <div
+                // style={{
+                //   width: "100%",
+                //   height: "8px",
+                //   background: "#f1f5f9",
+                //   borderRadius: "4px",
+                //   overflow: "hidden",
+                // }}
+              >
+                <div
+                  // style={{
+                  //   width: `${result.riskScore}%`,
+                  //   height: "100%",
+                  //   background: `linear-gradient(90deg, ${riskLevel.color}80, ${riskLevel.color})`,
+                  //   borderRadius: "4px",
+                  //   transition: "width 1s ease",
+                  // }}
+                />
+              </div>
+              <div
+                // style={{
+                //   display: "flex",
+                //   justifyContent: "space-between",
+                //   marginTop: "8px",
+                //   fontSize: "12px",
+                //   color: "#94a3b8",
+                // }}
+              >
+                {/* <span>Low Risk (0%)</span>
+                <span>Medium (50%)</span>
+                <span>High Risk (100%)</span> */}
+              </div>
+            </div>
+
+            <p
+              // style={{
+              //   marginTop: "16px",
+              //   fontSize: "15px",
+              //   color: riskLevel.color,
+              //   fontWeight: "500",
+              //   position: "relative",
+              //   zIndex: 1,
+              // }}
+            >
+              {/* {result.riskScore > 70
+                ? "🚫 HIGH RISK: This website appears to be a phishing site! Do not proceed."
+                : result.riskScore > 30
+                ? "⚠️ MEDIUM RISK: This website shows suspicious characteristics. Exercise caution."
+                : "✅ LOW RISK: This website appears to be safe."} */}
+            </p>
+          </div>
+
+          {/* Classification Card */}
+         
 
           {/* Recommendation */}
           <div
@@ -1653,9 +1251,9 @@ const URLScanner = () => {
                       letterSpacing: "0.5px",
                     }}
                   >
-                    Additional Comments
+                    {/* Additional Comments */}
                   </label>
-                  <textarea
+                  {/* <textarea
                     rows="4"
                     value={feedback.comments}
                     onChange={(e) =>
@@ -1675,7 +1273,7 @@ const URLScanner = () => {
                     }}
                     onFocus={(e) => (e.target.style.borderColor = "#667eea")}
                     onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
-                  />
+                  /> */}
                   <p
                     style={{
                       fontSize: "12px",
@@ -1688,7 +1286,7 @@ const URLScanner = () => {
                   </p>
                 </div>
 
-                <button
+                {/* <button
                   type="submit"
                   disabled={submitting}
                   style={{
@@ -1714,7 +1312,7 @@ const URLScanner = () => {
                   ) : (
                     "Submit Feedback"
                   )}
-                </button>
+                </button> */}
               </form>
             </div>
           )}

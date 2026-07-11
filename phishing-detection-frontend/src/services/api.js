@@ -12,23 +12,43 @@ const api = axios.create({
   timeout: 60000,
 });
 
+// --- Request Interceptor ---
 api.interceptors.request.use(
   (config) => {
     config.headers["ngrok-skip-browser-warning"] = "true";
+    
     const token = localStorage.getItem("accessToken");
+    console.log("🔑 Token present:", !!token);
+    console.log("📤 Method:", config.method.toUpperCase());
+    console.log("📤 URL:", config.url);
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log("🔑 Authorization header set");
+    } else {
+      console.warn("⚠️ No token found");
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    return Promise.reject(error);
+  }
 );
 
+// --- Response Interceptor ---
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`📥 Response: ${response.status} ${response.config.url}`);
+    return response;
+  },
   (error) => {
+    console.error("❌ API Error:", error.response?.status, error.response?.data);
+    
     if (error.code === "ERR_NETWORK") {
-      throw { message: "Cannot connect to server. Please check your connection.", isCorsError: true };
+      throw { 
+        message: "Cannot connect to server. Please check your connection.",
+        isCorsError: true
+      };
     }
     if (error.response) {
       throw error.response.data || { message: "Server error occurred" };
@@ -148,23 +168,25 @@ export const getScanByReference = async (reference) => {
   }
 };
 
+// ========== DELETE SCAN ==========
 export const deleteScanByReference = async (reference) => {
   try {
+    console.log(`🗑️ DELETING: /scans/${reference}`);
     const response = await api.delete(`/scans/${reference}`);
+    console.log("✅ Delete Success:", response.data);
     return response.data;
   } catch (error) {
-    throw error.response?.data || { message: "Failed to delete scan" };
+    console.error("❌ Delete Failed:", error);
+    throw error;
   }
 };
 
 // ==================== PDF REPORT DOWNLOAD ====================
+
 export const downloadScanReport = async (reference) => {
   try {
     const response = await api.get(`/scans/${reference}/report`, {
       responseType: "blob",
-      headers: {
-        "Accept": "application/pdf",
-      },
     });
     return response;
   } catch (error) {
