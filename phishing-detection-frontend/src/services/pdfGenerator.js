@@ -27,7 +27,7 @@ const generatePDFReport = (scanData, type) => {
   let y = margin;
 
   // ============================================================
-  // HEADER - Clean design with NO emojis
+  // HEADER 
   // ============================================================
   doc.setFillColor(102, 126, 234);
   doc.rect(0, 0, pageWidth, 40, 'F');
@@ -62,49 +62,48 @@ const generatePDFReport = (scanData, type) => {
   // ============================================================
   // SCAN SUMMARY - Clean Card with NO emojis
   // ============================================================
-  doc.setFontSize(11);
-  doc.setTextColor(60, 60, 80);
-  doc.setFont('helvetica', 'bold');
-  doc.text('SCAN SUMMARY', margin, y);
-  y += 6;
+  // doc.setFontSize(11);
+  // doc.setTextColor(60, 60, 80);
+  // doc.setFont('helvetica', 'bold');
+  // doc.text('SCAN SUMMARY', margin, y);
+  // y += 6;
 
+  // COMMENTED OUT - Risk Score Section
   // const riskScore = getRiskScore(scanData.prediction);
   // const riskInfo = getRiskInfo(riskScore);
 
   // Card background
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(margin, y, pageWidth - (margin * 2), 35, 4, 4, 'F');
-  doc.setDrawColor(220, 220, 235);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(margin, y, pageWidth - (margin * 2), 35, 4, 4, 'S');
+  // doc.setFillColor(248, 250, 252);
+  // doc.roundedRect(margin, y, pageWidth - (margin * 2), 35, 4, 4, 'F');
+  // doc.setDrawColor(220, 220, 235);
+  // doc.setLineWidth(0.3);
+  // doc.roundedRect(margin, y, pageWidth - (margin * 2), 35, 4, 4, 'S');
 
-  // Risk Score
+  // COMMENTED OUT - Risk Score Display
   // doc.setFontSize(28);
   // doc.setTextColor(riskInfo.color[0], riskInfo.color[1], riskInfo.color[2]);
   // doc.setFont('helvetica', 'bold');
   // doc.text(`${riskScore}%`, margin + 12, y + 25);
 
-  // Risk Label
+  // COMMENTED OUT - Risk Label
   // doc.setFontSize(13);
   // doc.setTextColor(riskInfo.color[0], riskInfo.color[1], riskInfo.color[2]);
   // doc.setFont('helvetica', 'bold');
   // doc.text(riskInfo.label, margin + 55, y + 22);
 
-  // Prediction
+  // COMMENTED OUT - Prediction
   // doc.setFontSize(9);
   // doc.setTextColor(80, 80, 100);
   // doc.setFont('helvetica', 'normal');
   // doc.text(`Prediction: ${scanData.prediction || 'N/A'}`, margin + 55, y + 32);
 
-  // Risk Bar
+  // COMMENTED OUT - Risk Bar
   // const barX = margin + 12;
   // const barY = y + 6;
   // const barWidth = pageWidth - (margin * 2) - 24;
   // const barHeight = 4;
-
   // doc.setFillColor(235, 235, 245);
   // doc.roundedRect(barX, barY, barWidth, barHeight, 2, 2, 'F');
-
   // const fillWidth = Math.min((riskScore / 100) * barWidth, barWidth);
   // doc.setFillColor(riskInfo.color[0], riskInfo.color[1], riskInfo.color[2]);
   // doc.roundedRect(barX, barY, fillWidth, barHeight, 2, 2, 'F');
@@ -266,7 +265,7 @@ const generatePDFReport = (scanData, type) => {
   }
 
   // ============================================================
-  // RECOMMENDATION - Clean Box
+  // RECOMMENDATION - Clean Box (COMMENTED OUT)
   // ============================================================
   // doc.setFillColor(245, 247, 250);
   // doc.roundedRect(margin, y, pageWidth - (margin * 2), 30, 4, 4, 'F');
@@ -344,7 +343,7 @@ const getRiskScore = (prediction) => {
 };
 
 /**
- * Get risk info based on score
+ * Get risk info based on score (COMMENTED OUT)
  */
 // const getRiskInfo = (score) => {
 //   if (score > 70) {

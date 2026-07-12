@@ -493,7 +493,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login", onSuccess }) => {
 
         {/* Social Buttons */}
         <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
-          <button
+          {/* <button
             type="button"
             style={{
               flex: 1,
@@ -515,8 +515,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login", onSuccess }) => {
             <span style={{ fontSize: "14px", fontWeight: "500", color: "#1e293b" }}>
               Google
             </span>
-          </button>
-          <button
+          </button> */}
+          {/* <button
             type="button"
             style={{
               flex: 1,
@@ -538,7 +538,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login", onSuccess }) => {
             <span style={{ fontSize: "14px", fontWeight: "500", color: "#1e293b" }}>
               GitHub
             </span>
-          </button>
+          </button> */}
         </div>
 
         {/* Switch Mode */}
