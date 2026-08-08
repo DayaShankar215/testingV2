@@ -3,7 +3,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 
 /**
- * Download PDF from scan data (JSON format)
+ * Download PDF from scan data
  */
 export const downloadPDF = (scanData, type) => {
   const doc = generatePDFReport(scanData, type);
@@ -12,7 +12,7 @@ export const downloadPDF = (scanData, type) => {
 };
 
 /**
- * Generate clean PDF report from scan data - NO EMOJIS, NO ENCODING ISSUES
+ * Generate a clean, minimal, card-based PDF report from scan data
  */
 const generatePDFReport = (scanData, type) => {
   const doc = new jsPDF({
@@ -23,277 +23,386 @@ const generatePDFReport = (scanData, type) => {
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 18;
+  const margin = 16;
+  const contentWidth = pageWidth - margin * 2;
   let y = margin;
 
-  // ============================================================
-  // HEADER 
-  // ============================================================
-  doc.setFillColor(102, 126, 234);
-  doc.rect(0, 0, pageWidth, 40, 'F');
+  // ------------------------------------------------------------
+  // Palette
+  // ------------------------------------------------------------
+  const palette = {
+    ink: [30, 41, 59],
+    body: [71, 85, 105],
+    subtle: [100, 116, 139],
+    faint: [148, 163, 184],
+    faintLight: [180, 190, 204],
+    border: [226, 232, 240],
+    cardBg: [250, 251, 252],
+    white: [255, 255, 255],
+    accent: [102, 126, 234],
+    danger: [220, 38, 38],
+    dangerBg: [254, 242, 242],
+    dangerBorder: [252, 200, 200],
+    warning: [180, 120, 10],
+    warningBg: [255, 247, 235],
+    warningBorder: [250, 220, 170],
+    success: [21, 128, 61],
+    successBg: [240, 253, 244],
+    successBorder: [190, 235, 205],
+  };
 
-  // Title
-  doc.setFontSize(18);
-  doc.setTextColor(255, 255, 255);
+  const setFill = (c) => doc.setFillColor(c[0], c[1], c[2]);
+  const setDraw = (c) => doc.setDrawColor(c[0], c[1], c[2]);
+  const setText = (c) => doc.setTextColor(c[0], c[1], c[2]);
+
+  const addPageIfNeeded = (needed) => {
+    if (y + needed > pageHeight - 20) {
+      doc.addPage();
+      y = margin;
+      return true;
+    }
+    return false;
+  };
+
+  // ============================================================
+  // HEADER
+  // ============================================================
   doc.setFont('helvetica', 'bold');
-  doc.text('SECURESHIELD', margin, 25);
+  doc.setFontSize(23);
+  setText(palette.faint);
+  if (doc.setCharSpace) doc.setCharSpace(0.6);
+  doc.text('SECURESHIELD', margin, y + 8);
+  if (doc.setCharSpace) doc.setCharSpace(0);
 
-  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(220, 230, 255);
-  // doc.text('AI-Powered Security Report', margin, 33);
+  doc.setFontSize(9);
+  setText(palette.faintLight);
+  doc.text('AI-Powered Security Report', margin, y + 14);
 
-  // Report ID & Date - Right side
-  doc.setFontSize(7);
-  doc.setTextColor(200, 215, 255);
+  doc.setFontSize(8);
+  setText(palette.faint);
   const ref = scanData.reference || 'N/A';
-  const shortRef = ref.length > 30 ? ref.substring(0, 27) + '...' : ref;
-  doc.text(`Report ID: ${shortRef}`, pageWidth - margin - 55, 18);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin - 55, 26);
+  doc.text(`Report ID: ${ref}`, margin, y + 21);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y + 26);
 
-  y = 48;
+  y = y + 34;
 
-  // Divider
-  doc.setDrawColor(200, 200, 220);
-  doc.setLineWidth(0.3);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 8;
+  // ------------------------------------------------------------
+  // Shared card helpers
+  // ------------------------------------------------------------
+  const CARD_PAD_X = 7;
+  const TITLE_H = 9;
+  const LINE_H = 5.2;
 
-  // ============================================================
-  // SCAN SUMMARY - Clean Card with NO emojis
-  // ============================================================
-  // doc.setFontSize(11);
-  // doc.setTextColor(60, 60, 80);
-  // doc.setFont('helvetica', 'bold');
-  // doc.text('SCAN SUMMARY', margin, y);
-  // y += 6;
+  const startCard = (title, totalHeight, titleColor, borderColor, bg) => {
+    addPageIfNeeded(totalHeight + 8);
+    const cardY = y;
 
-  // COMMENTED OUT - Risk Score Section
-  // const riskScore = getRiskScore(scanData.prediction);
-  // const riskInfo = getRiskInfo(riskScore);
-
-  // Card background
-  // doc.setFillColor(248, 250, 252);
-  // doc.roundedRect(margin, y, pageWidth - (margin * 2), 35, 4, 4, 'F');
-  // doc.setDrawColor(220, 220, 235);
-  // doc.setLineWidth(0.3);
-  // doc.roundedRect(margin, y, pageWidth - (margin * 2), 35, 4, 4, 'S');
-
-  // COMMENTED OUT - Risk Score Display
-  // doc.setFontSize(28);
-  // doc.setTextColor(riskInfo.color[0], riskInfo.color[1], riskInfo.color[2]);
-  // doc.setFont('helvetica', 'bold');
-  // doc.text(`${riskScore}%`, margin + 12, y + 25);
-
-  // COMMENTED OUT - Risk Label
-  // doc.setFontSize(13);
-  // doc.setTextColor(riskInfo.color[0], riskInfo.color[1], riskInfo.color[2]);
-  // doc.setFont('helvetica', 'bold');
-  // doc.text(riskInfo.label, margin + 55, y + 22);
-
-  // COMMENTED OUT - Prediction
-  // doc.setFontSize(9);
-  // doc.setTextColor(80, 80, 100);
-  // doc.setFont('helvetica', 'normal');
-  // doc.text(`Prediction: ${scanData.prediction || 'N/A'}`, margin + 55, y + 32);
-
-  // COMMENTED OUT - Risk Bar
-  // const barX = margin + 12;
-  // const barY = y + 6;
-  // const barWidth = pageWidth - (margin * 2) - 24;
-  // const barHeight = 4;
-  // doc.setFillColor(235, 235, 245);
-  // doc.roundedRect(barX, barY, barWidth, barHeight, 2, 2, 'F');
-  // const fillWidth = Math.min((riskScore / 100) * barWidth, barWidth);
-  // doc.setFillColor(riskInfo.color[0], riskInfo.color[1], riskInfo.color[2]);
-  // doc.roundedRect(barX, barY, fillWidth, barHeight, 2, 2, 'F');
-
-  // y = y + 35 + 10;
-
-  // ============================================================
-  // SCAN DETAILS - Clean Table
-  // ============================================================
-  doc.setFontSize(11);
-  doc.setTextColor(60, 60, 80);
-  doc.setFont('helvetica', 'bold');
-  doc.text('SCAN DETAILS', margin, y);
-  y += 5;
-
-  const detailsData = [];
-  if (scanData.reference) detailsData.push(['Reference', scanData.reference]);
-  if (scanData.url) detailsData.push(['URL', scanData.url]);
-  if (scanData.message) detailsData.push(['Message', scanData.message]);
-  if (scanData.prediction) detailsData.push(['Prediction', scanData.prediction]);
-  if (scanData.scannedAt) {
-    detailsData.push(['Scanned At', new Date(scanData.scannedAt).toLocaleString()]);
-  }
-
-  doc.autoTable({
-    startY: y,
-    head: [['Field', 'Value']],
-    body: detailsData,
-    theme: 'plain',
-    headStyles: {
-      fillColor: [240, 242, 245],
-      textColor: [40, 40, 60],
-      fontSize: 8,
-      fontStyle: 'bold',
-      halign: 'left',
-    },
-    styles: {
-      fontSize: 8,
-      cellPadding: 4,
-      lineColor: [230, 230, 240],
-      lineWidth: 0.1,
-    },
-    columnStyles: {
-      0: { cellWidth: 30, fontStyle: 'bold', textColor: [60, 60, 80] },
-      1: { cellWidth: 'auto' },
-    },
-    margin: { left: margin, right: margin },
-  });
-
-  y = doc.lastAutoTable.finalY + 8;
-
-  // ============================================================
-  // CONCLUSION - Clean Box
-  // ============================================================
-  if (scanData.conclusion) {
-    doc.setFillColor(250, 251, 253);
-    doc.roundedRect(margin, y, pageWidth - (margin * 2), 28, 4, 4, 'F');
-    doc.setDrawColor(220, 220, 235);
+    setFill(bg || palette.white);
+    doc.roundedRect(margin, cardY, contentWidth, totalHeight, 3, 3, 'F');
+    setDraw(borderColor || palette.border);
     doc.setLineWidth(0.3);
-    doc.roundedRect(margin, y, pageWidth - (margin * 2), 28, 4, 4, 'S');
+    doc.roundedRect(margin, cardY, contentWidth, totalHeight, 3, 3, 'S');
 
-    doc.setFontSize(10);
-    doc.setTextColor(40, 40, 60);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('ANALYSIS CONCLUSION', margin + 8, y + 7);
+    setText(titleColor || palette.ink);
+    doc.text(title, margin + CARD_PAD_X, cardY + 8);
 
-    doc.setFontSize(8);
-    doc.setTextColor(60, 60, 80);
+    setDraw(palette.border);
+    doc.setLineWidth(0.25);
+    doc.line(margin + CARD_PAD_X, cardY + 11, margin + contentWidth - CARD_PAD_X, cardY + 11);
+
+    return cardY;
+  };
+
+  const endCard = (cardY, totalHeight) => {
+    y = cardY + totalHeight + 8;
+  };
+
+  const fieldsCardHeight = (fields) => {
+    let h = TITLE_H + 6;
+    fields.forEach((f) => {
+      const valueWidth = contentWidth - CARD_PAD_X * 2 - 46;
+      const lines = doc.splitTextToSize(String(f.value), valueWidth);
+      h += Math.max(LINE_H, lines.length * LINE_H) + 3.5;
+    });
+    return h + 3;
+  };
+
+  const drawFieldsCard = (title, fields) => {
+    const totalHeight = fieldsCardHeight(fields);
+    const cardY = startCard(title, totalHeight, palette.ink, palette.border, palette.cardBg);
+    let rowY = cardY + TITLE_H + 8;
+
+    fields.forEach((f) => {
+      const valueWidth = contentWidth - CARD_PAD_X * 2 - 46;
+      const lines = doc.splitTextToSize(String(f.value), valueWidth);
+
+      doc.setFontSize(8.8);
+      doc.setFont('helvetica', 'bold');
+      setText(palette.ink);
+      doc.text(f.label, margin + CARD_PAD_X, rowY);
+
+      doc.setFontSize(8.8);
+      doc.setFont(f.mono ? 'courier' : 'helvetica', f.bold ? 'bold' : 'normal');
+      setText(f.color || palette.ink);
+      doc.text(lines, margin + contentWidth - CARD_PAD_X, rowY, { align: 'right' });
+
+      rowY += Math.max(LINE_H, lines.length * LINE_H) + 3.5;
+    });
+
+    endCard(cardY, totalHeight);
+  };
+
+  const bulletCardHeight = (items) => {
+    let h = TITLE_H + 6;
+    const textWidth = contentWidth - CARD_PAD_X * 2 - 6;
+    items.forEach((item) => {
+      const lines = doc.splitTextToSize(String(item), textWidth);
+      h += lines.length * LINE_H + 1.5;
+    });
+    return h + 4;
+  };
+
+  const drawBulletCard = (title, items, titleColor, borderColor, bulletColor) => {
+    if (!items || items.length === 0) return;
+    
+    const totalHeight = bulletCardHeight(items);
+    const cardY = startCard(title, totalHeight, titleColor, borderColor, palette.white);
+    let rowY = cardY + TITLE_H + 8;
+    const textWidth = contentWidth - CARD_PAD_X * 2 - 6;
+
+    doc.setFontSize(8.6);
     doc.setFont('helvetica', 'normal');
-    const conclusionLines = doc.splitTextToSize(scanData.conclusion, pageWidth - (margin * 2) - 16);
-    doc.text(conclusionLines, margin + 8, y + 16);
-    y = y + 28 + 8;
-  }
 
-  // ============================================================
-  // PHISHING REASONS - Clean Red Section
-  // ============================================================
-  if (scanData.phishingReasons && scanData.phishingReasons.length > 0) {
-    // Header
-    doc.setFillColor(254, 242, 242);
-    doc.roundedRect(margin, y, pageWidth - (margin * 2), 9, 4, 4, 'F');
-    
-    doc.setFontSize(10);
-    doc.setTextColor(180, 40, 40);
-    doc.setFont('helvetica', 'bold');
-    doc.text('PHISHING INDICATORS', margin + 8, y + 7);
-    y = y + 9 + 4;
+    items.forEach((item) => {
+      const lines = doc.splitTextToSize(String(item), textWidth);
 
-    const phishingData = scanData.phishingReasons.map((reason, i) => [i + 1, reason]);
+      setFill(bulletColor || palette.subtle);
+      doc.circle(margin + CARD_PAD_X + 1, rowY - 1.4, 0.7, 'F');
 
-    doc.autoTable({
-      startY: y,
-      head: [['#', 'Reason']],
-      body: phishingData,
-      theme: 'plain',
-      headStyles: {
-        fillColor: [252, 235, 235],
-        textColor: [180, 40, 40],
-        fontSize: 8,
-        fontStyle: 'bold',
-      },
-      styles: {
-        fontSize: 7.5,
-        cellPadding: 4,
-        lineColor: [240, 220, 220],
-        lineWidth: 0.1,
-      },
-      columnStyles: {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 'auto' },
-      },
-      margin: { left: margin, right: margin },
+      setText(palette.body);
+      doc.text(lines, margin + CARD_PAD_X + 5, rowY);
+
+      rowY += lines.length * LINE_H + 1.5;
     });
 
-    y = doc.lastAutoTable.finalY + 8;
+    endCard(cardY, totalHeight);
+  };
+
+  // ============================================================
+  // SCAN SUMMARY
+  // ============================================================
+  const prediction = scanData.overallPrediction || scanData.prediction || 'UNKNOWN';
+  const riskScore = getRiskScore(prediction);
+  const riskInfo = getRiskInfo(riskScore);
+  const scanTypeLabel = scanData.scanType || (type === 'message' ? 'Message Scan' : 'URL Scan');
+
+  const summaryFields = [];
+  summaryFields.push({ label: 'Scan Type:', value: scanTypeLabel });
+  summaryFields.push({
+    label: 'Overall Prediction:',
+    value: prediction,
+    color: riskInfo.color,
+    bold: true,
+  });
+  if (scanData.reference) {
+    summaryFields.push({ label: 'Reference:', value: scanData.reference, mono: true });
+  }
+  if (scanData.message) {
+    summaryFields.push({ label: 'Message:', value: scanData.message });
+  }
+  if (scanData.url) {
+    summaryFields.push({ label: 'URL:', value: scanData.url, mono: true });
+  }
+  if (scanData.messagePrediction) {
+    summaryFields.push({ label: 'Message Prediction:', value: scanData.messagePrediction });
+  }
+  if (scanData.scannedAt) {
+    summaryFields.push({ label: 'Scanned At:', value: new Date(scanData.scannedAt).toLocaleString() });
+  }
+
+  drawFieldsCard('SCAN SUMMARY', summaryFields);
+
+  // ============================================================
+  // MESSAGE LEGITIMATE REASONS
+  // ============================================================
+  if (scanData.messageLegitimateReasons && scanData.messageLegitimateReasons.length > 0) {
+    drawBulletCard(
+      'MESSAGE LEGITIMATE INDICATORS', 
+      scanData.messageLegitimateReasons, 
+      palette.success, 
+      palette.successBorder, 
+      palette.success
+    );
   }
 
   // ============================================================
-  // LEGITIMATE REASONS - Clean Green Section
+  // MESSAGE PHISHING REASONS
   // ============================================================
-  if (scanData.legitimateReasons && scanData.legitimateReasons.length > 0) {
-    // Header
-    doc.setFillColor(240, 250, 245);
-    doc.roundedRect(margin, y, pageWidth - (margin * 2), 9, 4, 4, 'F');
-    
-    doc.setFontSize(10);
-    doc.setTextColor(30, 130, 70);
-    doc.setFont('helvetica', 'bold');
-    doc.text('LEGITIMATE INDICATORS', margin + 8, y + 7);
-    y = y + 9 + 4;
+  if (scanData.messagePhishingReasons && scanData.messagePhishingReasons.length > 0) {
+    drawBulletCard(
+      'MESSAGE PHISHING INDICATORS', 
+      scanData.messagePhishingReasons, 
+      palette.danger, 
+      palette.dangerBorder, 
+      palette.danger
+    );
+  }
 
-    const legitData = scanData.legitimateReasons.map((reason, i) => [i + 1, reason]);
-
-    doc.autoTable({
-      startY: y,
-      head: [['#', 'Reason']],
-      body: legitData,
-      theme: 'plain',
-      headStyles: {
-        fillColor: [235, 248, 240],
-        textColor: [30, 130, 70],
-        fontSize: 8,
-        fontStyle: 'bold',
-      },
-      styles: {
-        fontSize: 7.5,
-        cellPadding: 4,
-        lineColor: [220, 240, 230],
-        lineWidth: 0.1,
-      },
-      columnStyles: {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 'auto' },
-      },
-      margin: { left: margin, right: margin },
+  // ============================================================
+  // URLS FOUND
+  // ============================================================
+  if (scanData.urlsFound && scanData.urlsFound.length > 0) {
+    const urlItems = scanData.urlsFound.map((url, index) => {
+      const urlResult = scanData.urlResults?.[index];
+      const urlPrediction = urlResult?.prediction || 'N/A';
+      return `URL ${index + 1}: ${url}  —  Prediction: ${urlPrediction}`;
     });
-
-    y = doc.lastAutoTable.finalY + 8;
+    drawBulletCard('URLS FOUND IN MESSAGE', urlItems, palette.warning, palette.warningBorder, palette.warning);
   }
 
   // ============================================================
-  // RECOMMENDATION - Clean Box (COMMENTED OUT)
+  // URL LEGITIMATE REASONS (from urlResults)
   // ============================================================
-  // doc.setFillColor(245, 247, 250);
-  // doc.roundedRect(margin, y, pageWidth - (margin * 2), 30, 4, 4, 'F');
-  // doc.setDrawColor(200, 200, 220);
-  // doc.setLineWidth(0.3);
-  // doc.roundedRect(margin, y, pageWidth - (margin * 2), 30, 4, 4, 'S');
+  if (scanData.urlResults && scanData.urlResults.length > 0) {
+    scanData.urlResults.forEach((urlResult, index) => {
+      if (urlResult.legitimateReasons && urlResult.legitimateReasons.length > 0) {
+        const title = `URL ${index + 1} LEGITIMATE INDICATORS`;
+        drawBulletCard(title, urlResult.legitimateReasons, palette.success, palette.successBorder, palette.success);
+      }
+    });
+  }
 
-  // doc.setFontSize(10);
-  // doc.setTextColor(40, 40, 60);
-  // doc.setFont('helvetica', 'bold');
-  // doc.text('SECURITY RECOMMENDATION', margin + 8, y + 7);
+  // ============================================================
+  // URL PHISHING REASONS (from urlResults)
+  // ============================================================
+  if (scanData.urlResults && scanData.urlResults.length > 0) {
+    scanData.urlResults.forEach((urlResult, index) => {
+      if (urlResult.phishingReasons && urlResult.phishingReasons.length > 0) {
+        const title = `URL ${index + 1} PHISHING INDICATORS`;
+        drawBulletCard(title, urlResult.phishingReasons, palette.danger, palette.dangerBorder, palette.danger);
+      }
+    });
+  }
 
-  // doc.setFontSize(8);
-  // doc.setTextColor(60, 60, 80);
-  // doc.setFont('helvetica', 'normal');
+  // ============================================================
+  // URL CONCLUSION (from urlResults)
+  // ============================================================
+  if (scanData.urlResults && scanData.urlResults.length > 0) {
+    scanData.urlResults.forEach((urlResult, index) => {
+      if (urlResult.conclusion) {
+        const textWidth = contentWidth - CARD_PAD_X * 2;
+        const lines = doc.splitTextToSize(urlResult.conclusion, textWidth);
+        const totalHeight = TITLE_H + 8 + lines.length * LINE_H + 4;
 
+        const cardY = startCard(`URL ${index + 1} ANALYSIS CONCLUSION`, totalHeight, palette.ink, palette.border, palette.cardBg);
+        doc.setFontSize(8.2);
+        doc.setFont('helvetica', 'normal');
+        setText(palette.body);
+        doc.text(lines, margin + CARD_PAD_X, cardY + TITLE_H + 8);
+        endCard(cardY, totalHeight);
+      }
+    });
+  }
+
+  // ============================================================
+  // URL PHISHING REASONS (top level for URL scans)
+  // ============================================================
+  if (type === 'url' && scanData.phishingReasons && scanData.phishingReasons.length > 0) {
+    // Check if we already showed these from urlResults
+    const hasUrlResultsPhishing = scanData.urlResults?.some(r => r.phishingReasons?.length > 0);
+    if (!hasUrlResultsPhishing) {
+      drawBulletCard('URL PHISHING INDICATORS', scanData.phishingReasons, palette.danger, palette.dangerBorder, palette.danger);
+    }
+  }
+
+  // ============================================================
+  // URL LEGITIMATE REASONS (top level for URL scans)
+  // ============================================================
+  if (type === 'url' && scanData.legitimateReasons && scanData.legitimateReasons.length > 0) {
+    const hasUrlResultsLegitimate = scanData.urlResults?.some(r => r.legitimateReasons?.length > 0);
+    if (!hasUrlResultsLegitimate) {
+      drawBulletCard('URL LEGITIMATE INDICATORS', scanData.legitimateReasons, palette.success, palette.successBorder, palette.success);
+    }
+  }
+
+  // ============================================================
+  // MAIN CONCLUSION
+  // ============================================================
+  const conclusion = scanData.conclusion || scanData.explanation;
+  if (conclusion) {
+    const textWidth = contentWidth - CARD_PAD_X * 2;
+    const lines = doc.splitTextToSize(conclusion, textWidth);
+    const totalHeight = TITLE_H + 8 + lines.length * LINE_H + 4;
+
+    const cardY = startCard('ANALYSIS CONCLUSION', totalHeight, palette.ink, palette.border, palette.cardBg);
+    doc.setFontSize(8.8);
+    doc.setFont('helvetica', 'normal');
+    setText(palette.body);
+    doc.text(lines, margin + CARD_PAD_X, cardY + TITLE_H + 8);
+    endCard(cardY, totalHeight);
+  }
+
+  // ============================================================
+  // RECOMMENDATION
+  // ============================================================
   // let recommendation = '';
-  // if (riskScore > 70) {
-  //   recommendation = 'DO NOT proceed to this website. Report this URL to security authorities immediately. This is a confirmed phishing attempt designed to steal your credentials.';
-  // } else if (riskScore > 30) {
-  //   recommendation = 'Exercise extreme caution. Verify the website\'s authenticity through official channels before entering any personal information or credentials.';
+  // const upperPred = prediction.toUpperCase().trim();
+  
+  // if (['PHISHING', 'DANGEROUS', 'MALICIOUS'].includes(upperPred) || riskScore > 70) {
+  //   if (type === 'message') {
+  //     recommendation = '🚫 DO NOT engage with this message. Block the sender immediately. Never click links, reply, or call any numbers provided. Report this as spam to your carrier.';
+  //   } else {
+  //     recommendation = '🚫 DO NOT proceed to this website. Report this URL to security authorities immediately. This is a confirmed phishing attempt designed to steal your credentials.';
+  //   }
+  // } else if (['SUSPICIOUS', 'WARNING', 'SCAM'].includes(upperPred) || riskScore > 30) {
+  //   if (type === 'message') {
+  //     recommendation = '⚠️ Be cautious. Do not share personal information, click suspicious links, or call unknown numbers. Verify the sender through official channels.';
+  //   } else {
+  //     recommendation = '⚠️ Exercise extreme caution. Verify the website\'s authenticity through official channels before entering any personal information or credentials.';
+  //   }
   // } else {
-  //   recommendation = 'You can safely proceed. However, always verify the URL matches the official website before entering sensitive information.';
+  //   if (type === 'message') {
+  //     recommendation = '✅ This message appears safe. However, always verify unexpected requests, especially those asking for personal information or money transfers.';
+  //   } else {
+  //     recommendation = '✅ You can safely proceed. However, always verify the URL matches the official website before entering sensitive information.';
+  //   }
   // }
 
-  // const recLines = doc.splitTextToSize(recommendation, pageWidth - (margin * 2) - 16);
-  // doc.text(recLines, margin + 8, y + 17);
-  // y = y + 30 + 10;
+  const recTextWidth = contentWidth - CARD_PAD_X * 2;
+  const recLines = doc.splitTextToSize(recTextWidth);
+  const recHeight = recLines.length * LINE_H + 14;
+
+  // addPageIfNeeded(recHeight + 8);
+  // const recY = y;
+  // setFill(riskInfo.bg);
+  // doc.roundedRect(margin, recY, contentWidth, recHeight, 3, 3, 'F');
+  // setDraw(riskInfo.borderColor);
+  // doc.setLineWidth(0.4);
+  // doc.roundedRect(margin, recY, contentWidth, recHeight, 3, 3, 'S');
+
+  // Add risk level badge
+  // doc.setFontSize(7);
+  // doc.setFont('helvetica', 'bold');
+  // setText(riskInfo.color);
+  // const badgeText = riskInfo.label;
+  // const badgeWidth = doc.getStringUnitWidth(badgeText) * 7 / doc.internal.scaleFactor;
+  // const badgeX = margin + contentWidth - CARD_PAD_X - badgeWidth - 6;
+  // setFill(riskInfo.bg);
+  // doc.roundedRect(badgeX, recY + 2, badgeWidth + 6, 6, 2, 2, 'F');
+  // setDraw(riskInfo.color);
+  // doc.setLineWidth(0.3);
+  // doc.roundedRect(badgeX, recY + 2, badgeWidth + 6, 6, 2, 2, 'S');
+  // setText(riskInfo.color);
+  // doc.text(badgeText, badgeX + 3, recY + 6.5);
+
+  // doc.setFontSize(9);
+  // doc.setFont('helvetica', 'normal');
+  // setText(palette.body);
+  // doc.text(recLines, margin + CARD_PAD_X, recY + 12);
+  // y = recY + recHeight + 8;
 
   // ============================================================
   // FOOTER - All Pages
@@ -302,35 +411,33 @@ const generatePDFReport = (scanData, type) => {
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
 
-    // Footer line
-    doc.setDrawColor(220, 220, 235);
+    setDraw(palette.border);
     doc.setLineWidth(0.3);
-    doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+    doc.line(margin, pageHeight - 13, pageWidth - margin, pageHeight - 13);
 
-    // Footer text
-    doc.setFontSize(7);
-    doc.setTextColor(160, 160, 180);
+    doc.setFontSize(7.5);
+    setText(palette.faint);
     doc.setFont('helvetica', 'normal');
-    doc.text(
-      `Page ${i} of ${pageCount}  •  SecureShield AI Security  •  ${new Date().getFullYear()}`,
-      pageWidth / 2,
-      pageHeight - 6,
-      { align: 'center' }
-    );
+    doc.text('SecureShield AI Security', margin, pageHeight - 7);
+
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 7, { align: 'right' });
   }
 
   return doc;
 };
 
 /**
- * Get risk score based on prediction
+ * Get risk score from prediction
  */
 const getRiskScore = (prediction) => {
-  switch (prediction?.toUpperCase()) {
+  if (!prediction) return 50;
+  const upper = prediction.toUpperCase().trim();
+  switch (upper) {
     case "PHISHING":
     case "DANGEROUS":
     case "MALICIOUS":
       return 85;
+    case "SCAM":
     case "SUSPICIOUS":
     case "WARNING":
       return 55;
@@ -343,114 +450,33 @@ const getRiskScore = (prediction) => {
 };
 
 /**
- * Get risk info based on score (COMMENTED OUT)
+ * Get risk info for styling
  */
-// const getRiskInfo = (score) => {
-//   if (score > 70) {
-//     return {
-//       label: 'HIGH RISK',
-//       color: [200, 40, 40],
-//     };
-//   } else if (score > 30) {
-//     return {
-//       label: 'MEDIUM RISK',
-//       color: [200, 160, 30],
-//     };
-//   } else {
-//     return {
-//       label: 'LOW RISK',
-//       color: [16, 185, 129],
-//     };
-//   }
-// };
-
-/**
- * Convert CSV from backend to PDF
- */
-export const downloadCSVAsPDF = async (csvBlob, filename = "security_report") => {
-  try {
-    const csvText = await csvBlob.text();
-    const rows = parseCSV(csvText);
-    const scanData = convertCSVToScanData(rows);
-    const doc = generatePDFReport(scanData, 'url');
-    doc.save(`${filename}.pdf`);
-  } catch (error) {
-    console.error("Error converting CSV to PDF:", error);
-    throw new Error("Failed to generate PDF report");
+const getRiskInfo = (score) => {
+  if (score > 70) {
+    return {
+      label: 'HIGH RISK',
+      color: [220, 38, 38],
+      bg: [254, 242, 242],
+      borderColor: [252, 165, 165],
+    };
+  } else if (score > 30) {
+    return {
+      label: 'MEDIUM RISK',
+      color: [180, 120, 10],
+      bg: [255, 247, 235],
+      borderColor: [252, 211, 121],
+    };
+  } else {
+    return {
+      label: 'LOW RISK',
+      color: [21, 128, 61],
+      bg: [240, 253, 244],
+      borderColor: [134, 239, 172],
+    };
   }
-};
-
-/**
- * Parse CSV text to array of rows
- */
-const parseCSV = (csvText) => {
-  const lines = csvText.split(/\r\n|\n/);
-  const rows = [];
-  
-  for (const line of lines) {
-    if (line.trim() === '') continue;
-    const values = [];
-    let current = '';
-    let inQuotes = false;
-    
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        values.push(current.trim());
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    values.push(current.trim());
-    rows.push(values);
-  }
-  
-  return rows;
-};
-
-/**
- * Convert CSV rows to scan data format
- */
-const convertCSVToScanData = (rows) => {
-  if (rows.length === 0) return {};
-  
-  const headers = rows[0];
-  const dataRows = rows.slice(1);
-  const scanData = {
-    reference: '',
-    url: '',
-    prediction: '',
-    conclusion: '',
-    scannedAt: '',
-    phishingReasons: [],
-    legitimateReasons: [],
-  };
-  
-  for (const row of dataRows) {
-    for (let i = 0; i < headers.length && i < row.length; i++) {
-      const header = headers[i].toLowerCase().trim();
-      const value = row[i] || '';
-      
-      if (header.includes('reference')) scanData.reference = value;
-      else if (header.includes('url')) scanData.url = value;
-      else if (header.includes('prediction')) scanData.prediction = value;
-      else if (header.includes('conclusion')) scanData.conclusion = value;
-      else if (header.includes('scanned')) scanData.scannedAt = value;
-      else if (header.includes('phishing') && !header.includes('score')) {
-        if (value && !value.includes('N/A')) scanData.phishingReasons.push(value);
-      } else if (header.includes('legitimate') && !header.includes('score')) {
-        if (value && !value.includes('N/A')) scanData.legitimateReasons.push(value);
-      }
-    }
-  }
-  
-  return scanData;
 };
 
 export default {
-  downloadCSVAsPDF,
   downloadPDF,
 };

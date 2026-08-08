@@ -1,34 +1,26 @@
 // pages/MessageScanner.jsx
 import React, { useState } from "react";
-import { scanMessage, submitFeedback, getScanByReference } from "../services/api";
-import { validateMessage } from "../utils/validators";
+import { scanMessage, submitFeedbackMessage, submitAccuracy, getScanByReference } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
 import AuthModal from "../components/common/AuthModal";
 import {
-  FaEnvelope,
+  FaShieldAlt,
   FaDownload,
-  FaExclamationTriangle,
   FaInfoCircle,
+  FaEnvelope,
+  FaExclamationTriangle,
+  FaCheckCircle,
   FaCopy,
-  FaWhatsapp,
-  FaStar,
-  FaRegStar,
   FaThumbsUp,
   FaThumbsDown,
-  FaCheckCircle,
   FaSpinner,
-  FaCheck,
-  FaTimes,
-  FaUserSecret,
-  FaLink,
-  FaPhone,
-  FaHashtag,
-  FaQuoteRight,
   FaUserPlus,
   FaExclamationCircle,
   FaWifi,
   FaFilePdf,
+  FaWhatsapp,
+  FaLink,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -37,7 +29,7 @@ const MessageScanner = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [charCount, setCharCount] = useState(0);
+  const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
@@ -47,18 +39,22 @@ const MessageScanner = () => {
 
   // Feedback state
   const [showFeedback, setShowFeedback] = useState(false);
+  const [scanId, setScanId] = useState("");
   const [feedback, setFeedback] = useState({
-    scanId: "",
     type: "message",
-    isAccurate: true,
-    rating: 0,
+    isAccurate: null,
     comments: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackReply, setFeedbackReply] = useState("");
+  const [accuracySubmitted, setAccuracySubmitted] = useState(false);
+  const [accuracyError, setAccuracyError] = useState(null);
 
   const getRiskScoreFromPrediction = (prediction) => {
-    switch (prediction?.toUpperCase()) {
+    if (!prediction) return 50;
+    const upper = prediction.toUpperCase().trim();
+    switch (upper) {
       case "PHISHING":
       case "DANGEROUS":
       case "MALICIOUS":
@@ -76,14 +72,21 @@ const MessageScanner = () => {
   };
 
   const processScanResponse = (response, scannedMessage) => {
-    const prediction = response.prediction?.toUpperCase() || "UNKNOWN";
+    const rawPrediction = response.overallPrediction || response.prediction || "UNKNOWN";
+    const prediction = rawPrediction;
+    
     let riskScore = 50;
     let resultType = "unknown";
 
-    switch (prediction) {
+    const upperPrediction = prediction.toUpperCase().trim();
+    
+    switch (upperPrediction) {
       case "PHISHING":
       case "DANGEROUS":
       case "MALICIOUS":
+        riskScore = 85;
+        resultType = "phishing";
+        break;
       case "SCAM":
         riskScore = 85;
         resultType = "scam";
@@ -103,77 +106,43 @@ const MessageScanner = () => {
         resultType = "unknown";
     }
 
-    const features = extractMessageFeatures(scannedMessage);
-    const extractedUrls = extractUrlsFromMessage(scannedMessage);
-
     return {
       reference: response.reference,
-      message: response.message || scannedMessage,
-      prediction: response.prediction,
-      classification: response.prediction || "UNKNOWN",
+      message: scannedMessage || response.message || "",
+      prediction: prediction,
+      classification: prediction || "UNKNOWN",
       riskScore: riskScore,
-      confidence: 0.85,
       explanation: response.conclusion || "Analysis completed",
       result: resultType,
-      features: features,
-      extractedUrls: extractedUrls,
       scannedAt: response.scannedAt || new Date().toISOString(),
+      _raw: response,
     };
-  };
-
-  const extractMessageFeatures = (text) => {
-    const hasURL = /https?:\/\/[^\s]+/.test(text);
-    const hasPhone = /\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{1,4}[\s\-]?\d{1,9}/.test(text);
-    const suspiciousKeywords = [
-      "urgent", "immediate", "verify", "confirm", "account", "password",
-      "bank", "paypal", "credit card", "ssn", "social security",
-      "win", "prize", "free", "offer", "limited time",
-      "click here", "verify now", "update your", "security alert"
-    ];
-    const matches = suspiciousKeywords.filter((keyword) =>
-      text.toLowerCase().includes(keyword.toLowerCase())
-    );
-    const specialCharCount = (text.match(/[^a-zA-Z0-9\s]/g) || []).length;
-    const uppercaseRatio =
-      text.length > 0 ? (text.match(/[A-Z]/g) || []).length / text.length : 0;
-
-    return {
-      length: text.length,
-      hasURL,
-      hasPhone,
-      suspiciousKeywordCount: matches.length,
-      specialCharCount,
-      uppercaseRatio,
-      suspiciousKeywords: matches,
-    };
-  };
-
-  const extractUrlsFromMessage = (text) => {
-    const urlRegex = /https?:\/\/[^\s]+/g;
-    return text.match(urlRegex) || [];
   };
 
   const handleScan = async (e) => {
     e.preventDefault();
-
-    const validation = validateMessage(message);
-    if (!validation.isValid) {
-      toast.error(validation.error);
-      setError(validation.error);
-      return;
-    }
 
     setLoading(true);
     setError(null);
     setConnectionError(false);
     setShowFeedback(false);
     setFeedbackSubmitted(false);
+    setFeedbackReply("");
+    setAccuracySubmitted(false);
+    setAccuracyError(null);
+    setScanId("");
+    setFeedback({
+      type: "message",
+      isAccurate: null,
+      comments: "",
+    });
 
     try {
       const response = await scanMessage(message);
       console.log("API Response:", response);
 
       const scanResult = processScanResponse(response, message);
+      console.log("Processed Result:", scanResult);
       setResult(scanResult);
 
       if (!isAuthenticated) {
@@ -184,8 +153,16 @@ const MessageScanner = () => {
         });
       }
 
+      const reference = response.reference || "";
+      setScanId(reference);
+      
       setShowFeedback(true);
-      setFeedback((prev) => ({ ...prev, scanId: response.reference }));
+      setFeedback({
+        type: "message",
+        isAccurate: null,
+        comments: "",
+      });
+      
       toast.success("Message analysis completed!");
     } catch (err) {
       console.error("Scan Error:", err);
@@ -220,23 +197,27 @@ const MessageScanner = () => {
 
     setDownloading(true);
     try {
-      // Fetch scan details for PDF generation
       const scanDetails = await getScanByReference(reference);
       console.log("Scan Details for PDF:", scanDetails);
       
-      // Format the data for PDF generation
       const pdfData = {
         reference: scanDetails.reference,
-        message: scanDetails.message || result.message,
-        prediction: scanDetails.prediction,
-        riskScore: result.riskScore || getRiskScoreFromPrediction(scanDetails.prediction),
-        conclusion: scanDetails.conclusion,
+        scanType: scanDetails.scanType || "MESSAGE",
+        message: result.message || scanDetails.message || "",
+        prediction: scanDetails.overallPrediction || scanDetails.prediction,
+        riskScore: result.riskScore || getRiskScoreFromPrediction(scanDetails.overallPrediction || scanDetails.prediction),
+        conclusion: scanDetails.conclusion || "Analysis completed",
         scannedAt: scanDetails.scannedAt,
-        phishingReasons: scanDetails.phishingReasons || [],
-        legitimateReasons: scanDetails.legitimateReasons || [],
+        phishingReasons: scanDetails.messagePhishingReasons || scanDetails.phishingReasons || [],
+        legitimateReasons: scanDetails.messageLegitimateReasons || scanDetails.legitimateReasons || [],
+        urlsFound: scanDetails.urlsFound || [],
+        urlResults: scanDetails.urlResults || [],
+        messagePhishingReasons: scanDetails.messagePhishingReasons || [],
+        messageLegitimateReasons: scanDetails.messageLegitimateReasons || [],
+        overallPrediction: scanDetails.overallPrediction || scanDetails.prediction,
+        messagePrediction: scanDetails.messagePrediction || scanDetails.prediction,
       };
       
-      // Generate PDF using our custom generator
       const { downloadPDF } = await import('../services/pdfGenerator');
       downloadPDF(pdfData, 'message');
       
@@ -249,76 +230,95 @@ const MessageScanner = () => {
     }
   };
 
-  const handleMessageChange = (e) => {
-    const text = e.target.value;
-    setMessage(text);
-    setCharCount(text.length);
-  };
-
   const handleCopyMessage = () => {
     navigator.clipboard.writeText(message);
+    setCopied(true);
     toast.success("Message copied to clipboard!");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ✅ FIXED: Allow toggling accuracy selection
+  const handleAccuracySelect = async (isAccurate) => {
+    console.log("Scan ID:", scanId);
+    
+    if (!scanId || scanId.trim() === "") {
+      toast.error("Scan ID not found. Please try scanning again.");
+      console.error("Scan ID is null or empty:", scanId);
+      return;
+    }
+
+    // ✅ If user clicks the same option, deselect it (toggle off)
+    if (feedback.isAccurate === isAccurate) {
+      setFeedback({ ...feedback, isAccurate: null });
+      setAccuracySubmitted(false);
+      setAccuracyError(null);
+      return;
+    }
+
+    setFeedback({ ...feedback, isAccurate });
+    setAccuracyError(null);
+    
+    try {
+      console.log("Submitting accuracy with:", {
+        reference: scanId,
+        accurate: isAccurate
+      });
+      
+      const response = await submitAccuracy({
+        reference: scanId,
+        accurate: isAccurate
+      });
+      
+      console.log("Accuracy Response:", response);
+      setAccuracySubmitted(true);
+      
+      if (response?.reply) {
+        toast.success(response.reply);
+      } else {
+        toast.success("Thank you for your feedback!");
+      }
+    } catch (error) {
+      console.error("Accuracy Submit Error:", error);
+      setAccuracyError(error.message || "Failed to submit accuracy");
+      toast.error(error.message || "Failed to submit accuracy");
+      setFeedback({ ...feedback, isAccurate: null });
+      setAccuracySubmitted(false);
+    }
   };
 
   const handleFeedbackSubmit = async (e) => {
     e.preventDefault();
 
-    if (!feedback.scanId) {
-      toast.error("Scan ID not found");
-      return;
-    }
-
-    if (feedback.rating === 0) {
-      toast.error("Please rate the detection accuracy");
+    if (!feedback.comments || feedback.comments.trim() === "") {
+      toast.error("Please write your feedback");
       return;
     }
 
     setSubmitting(true);
+    
     try {
-      await submitFeedback(
-        feedback.scanId,
-        feedback.type,
-        feedback.isAccurate,
-        feedback.comments,
-        feedback.rating
-      );
+      const response = await submitFeedbackMessage(feedback.comments);
+      console.log("Feedback Message Response:", response);
+      
+      if (response?.reply) {
+        setFeedbackReply(response.reply);
+      }
+      
       setFeedbackSubmitted(true);
       toast.success("Thank you for your feedback! 🎉");
+      
       setTimeout(() => {
         setShowFeedback(false);
         setFeedbackSubmitted(false);
-      }, 3000);
+        setFeedbackReply("");
+      }, 5000);
+
     } catch (error) {
-      toast.error("Failed to submit feedback");
+      console.error("Feedback Submit Error:", error);
+      toast.error(error.message || "Failed to submit feedback");
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const renderStars = () => {
-    return [1, 2, 3, 4, 5].map((star) => (
-      <button
-        key={star}
-        type="button"
-        onClick={() => setFeedback({ ...feedback, rating: star })}
-        style={{
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontSize: "30px",
-          transition: "transform 0.2s",
-          padding: "0 4px",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.1)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      >
-        {star <= feedback.rating ? (
-          <FaStar style={{ color: "#ffc107" }} />
-        ) : (
-          <FaRegStar style={{ color: "#ddd" }} />
-        )}
-      </button>
-    ));
   };
 
   const getRiskLevel = (score) => {
@@ -445,47 +445,92 @@ const MessageScanner = () => {
             >
               Paste Suspicious Message
             </label>
-            <div style={{ position: "relative" }}>
-              <textarea
-                rows="8"
-                value={message}
-                onChange={handleMessageChange}
-                placeholder="Paste the suspicious message here...&#10;&#10;Example:&#10;'Congratulations! You've won $1000! Click here to claim your prize: http://bit.ly/fake-link'"
-                style={{
-                  width: "100%",
-                  padding: "20px",
-                  border: "2px solid #e2e8f0",
-                  borderRadius: "20px",
-                  fontSize: "16px",
-                  fontFamily: "inherit",
-                  resize: "vertical",
-                  transition: "all 0.3s ease",
-                  outline: "none",
-                  lineHeight: "1.6",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "#f5576c")}
-                onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
-                disabled={loading}
-              />
-              {message && (
-                <button
-                  type="button"
-                  onClick={handleCopyMessage}
+            <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+              <div style={{ flex: 1, position: "relative" }}>
+                <FaEnvelope
                   style={{
                     position: "absolute",
-                    bottom: "16px",
-                    right: "16px",
-                    background: "#f8fafc",
-                    border: "none",
-                    padding: "8px",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    color: "#64748b",
+                    left: "16px",
+                    top: "20px",
+                    color: "#94a3b8",
                   }}
-                >
-                  <FaCopy />
-                </button>
-              )}
+                />
+                <textarea
+                  rows="6"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Paste the suspicious message here..."
+                  style={{
+                    width: "100%",
+                    padding: "16px 16px 16px 48px",
+                    border: "2px solid #e2e8f0",
+                    borderRadius: "16px",
+                    fontSize: "16px",
+                    fontFamily: "inherit",
+                    resize: "vertical",
+                    transition: "all 0.3s ease",
+                    outline: "none",
+                    lineHeight: "1.6",
+                    minHeight: "160px",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#f5576c")}
+                  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+                  disabled={loading}
+                />
+                {message && (
+                  <button
+                    type="button"
+                    onClick={handleCopyMessage}
+                    style={{
+                      position: "absolute",
+                      bottom: "16px",
+                      right: "16px",
+                      background: "#f8fafc",
+                      border: "none",
+                      padding: "8px",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      color: copied ? "#10b981" : "#94a3b8",
+                    }}
+                  >
+                    <FaCopy />
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  background: loading
+                    ? "#94a3b8"
+                    : "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                  color: "white",
+                  padding: "16px 32px",
+                  border: "none",
+                  borderRadius: "16px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  transition: "all 0.3s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  whiteSpace: "nowrap",
+                  height: "56px",
+                }}
+              >
+                {loading ? (
+                  <>
+                    <FaSpinner className="spinning" />
+                    <span>Analyzing...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaShieldAlt />
+                    <span>Analyze</span>
+                  </>
+                )}
+              </button>
             </div>
             <div
               style={{
@@ -496,48 +541,14 @@ const MessageScanner = () => {
                 color: "#94a3b8",
               }}
             >
-              <span>Characters: {charCount}</span>
+              <span>Characters: {message.length}</span>
               <span>Minimum 10 characters recommended</span>
             </div>
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              background: loading
-                ? "#94a3b8"
-                : "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-              color: "white",
-              padding: "18px",
-              border: "none",
-              borderRadius: "16px",
-              fontSize: "16px",
-              fontWeight: "600",
-              cursor: loading ? "not-allowed" : "pointer",
-              transition: "all 0.3s ease",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "10px",
-            }}
-          >
-            {loading ? (
-              <>
-                <FaSpinner className="spinning" />
-                <span>Analyzing Message...</span>
-              </>
-            ) : (
-              <>
-                <span>Analyze Message</span>
-              </>
-            )}
-          </button>
         </form>
       </div>
 
-      {/* Connection Error Display */}
+      {/* Error Display */}
       {connectionError && (
         <div
           style={{
@@ -583,7 +594,6 @@ const MessageScanner = () => {
         </div>
       )}
 
-      {/* Regular Error Display */}
       {error && !connectionError && (
         <div
           style={{
@@ -630,6 +640,191 @@ const MessageScanner = () => {
                 transform: "translate(100px, -100px)",
               }}
             />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+                gap: "24px",
+                marginBottom: "32px",
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "20px",
+                  padding: "28px",
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
+                  border: "1px solid #f1f5f9",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    marginBottom: "20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "48px",
+                      height: "48px",
+                      background:
+                        "linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)",
+                      borderRadius: "14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "20px",
+                    }}
+                  >
+                    🏷️
+                  </div>
+                  <div>
+                    <h3
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "700",
+                        color: "#1e293b",
+                        margin: 0,
+                      }}
+                    >
+                      Classification
+                    </h3>
+                    <p
+                      style={{
+                        fontSize: "13px",
+                        color: "#94a3b8",
+                        margin: 0,
+                      }}
+                    >
+                      AI-Powered Prediction
+                    </p>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    padding: "16px",
+                    background: "#f8fafc",
+                    borderRadius: "12px",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: "18px",
+                      fontWeight: "700",
+                      color: riskLevel.color,
+                      lineHeight: "1.6",
+                      margin: 0,
+                    }}
+                  >
+                    {result.prediction || result.classification}
+                  </p>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {result.reference && (
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "6px 14px",
+                        background: "#f1f5f9",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        color: "#64748b",
+                      }}
+                    >
+                      <FaInfoCircle size={14} />
+                      Ref: {result.reference}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: "20px",
+                  padding: "28px",
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
+                  border: "1px solid #f1f5f9",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    marginBottom: "20px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "48px",
+                      height: "48px",
+                      background:
+                        "linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)",
+                      borderRadius: "14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "20px",
+                    }}
+                  >
+                    📋
+                  </div>
+                  <div>
+                    <h3
+                      style={{
+                        fontSize: "16px",
+                        fontWeight: "700",
+                        color: "#1e293b",
+                        margin: 0,
+                      }}
+                    >
+                      Analysis Details
+                    </h3>
+                    <p
+                      style={{
+                        fontSize: "13px",
+                        color: "#94a3b8",
+                        margin: 0,
+                      }}
+                    >
+                      Key Scam Indicators
+                    </p>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    padding: "16px",
+                    background: "#f8fafc",
+                    borderRadius: "12px",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#475569",
+                      lineHeight: "1.7",
+                      margin: 0,
+                    }}
+                  >
+                    {result.explanation}
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div
               style={{
@@ -640,6 +835,7 @@ const MessageScanner = () => {
                 gap: "20px",
                 position: "relative",
                 zIndex: 1,
+                marginTop: "16px",
               }}
             >
               <div>
@@ -651,7 +847,7 @@ const MessageScanner = () => {
                     marginBottom: "8px",
                   }}
                 >
-                  <span style={{ fontSize: "28px" }}>{riskLevel.icon}</span>
+                  {/* <span style={{ fontSize: "28px" }}>{riskLevel.icon}</span>
                   <span
                     style={{
                       fontSize: "14px",
@@ -663,30 +859,7 @@ const MessageScanner = () => {
                     }}
                   >
                     {riskLevel.badge}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "13px",
-                      fontWeight: "500",
-                      color: "#94a3b8",
-                    }}
-                  >
-                    Scam Risk Assessment
-                  </span>
-                  {result.reference && (
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "400",
-                        color: "#94a3b8",
-                        background: "#f1f5f9",
-                        padding: "2px 12px",
-                        borderRadius: "4px",
-                      }}
-                    >
-                      Ref: {result.reference}
-                    </span>
-                  )}
+                  </span> */}
                 </div>
                 <div
                   style={{
@@ -695,7 +868,7 @@ const MessageScanner = () => {
                     gap: "16px",
                   }}
                 >
-                  <span
+                  {/* <span
                     style={{
                       fontSize: "56px",
                       fontWeight: "800",
@@ -713,11 +886,11 @@ const MessageScanner = () => {
                     }}
                   >
                     {riskLevel.label}
-                  </span>
+                  </span> */}
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap", width: "100%" }}>
                 <button
                   onClick={handleDownloadReport}
                   disabled={downloading}
@@ -770,18 +943,17 @@ const MessageScanner = () => {
               </div>
             </div>
 
-            {/* Progress Bar */}
             <div style={{ marginTop: "20px", position: "relative", zIndex: 1 }}>
               <div
                 style={{
                   width: "100%",
                   height: "8px",
-                  background: "#f1f5f9",
+                  // background: "#f1f5f9",
                   borderRadius: "4px",
                   overflow: "hidden",
                 }}
               >
-                <div
+                {/* <div
                   style={{
                     width: `${result.riskScore}%`,
                     height: "100%",
@@ -789,7 +961,7 @@ const MessageScanner = () => {
                     borderRadius: "4px",
                     transition: "width 1s ease",
                   }}
-                />
+                /> */}
               </div>
               <div
                 style={{
@@ -800,13 +972,13 @@ const MessageScanner = () => {
                   color: "#94a3b8",
                 }}
               >
-                <span>Safe (0%)</span>
-                <span>Suspicious (50%)</span>
-                <span>Dangerous (100%)</span>
+                {/* <span>Low Risk (0%)</span>
+                <span>Medium (50%)</span>
+                <span>High Risk (100%)</span> */}
               </div>
             </div>
 
-            <p
+            {/* <p
               style={{
                 marginTop: "16px",
                 fontSize: "15px",
@@ -821,807 +993,82 @@ const MessageScanner = () => {
                 : result.riskScore > 30
                 ? "⚠️ MEDIUM RISK: This message shows scam indicators. Exercise caution."
                 : "✅ LOW RISK: This message appears legitimate."}
-            </p>
+            </p> */}
           </div>
 
-          {/* Message Content Card */}
-          <div
-            style={{
-              background: "white",
-              borderRadius: "20px",
-              padding: "28px",
-              marginBottom: "32px",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
-              border: "1px solid #f1f5f9",
-            }}
-          >
+          {/* Message Phishing Reasons */}
+          {result._raw?.messagePhishingReasons && result._raw.messagePhishingReasons.length > 0 && (
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "14px",
-                marginBottom: "20px",
+                background: "#fee2e2",
+                borderRadius: "16px",
+                padding: "20px",
+                marginBottom: "16px",
+                border: "1px solid #fca5a5",
               }}
             >
-              <div
-                style={{
-                  width: "48px",
-                  height: "48px",
-                  background:
-                    "linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)",
-                  borderRadius: "14px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "20px",
-                }}
-              >
-                <FaQuoteRight />
-              </div>
-              <div>
-                <h3
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: "700",
-                    color: "#1e293b",
-                    margin: 0,
-                  }}
-                >
-                  Analyzed Message
-                </h3>
-                <p
-                  style={{
-                    fontSize: "13px",
-                    color: "#94a3b8",
-                    margin: 0,
-                  }}
-                >
-                  Content that was scanned
-                </p>
-              </div>
-            </div>
-            <div
-              style={{
-                background: "#f8fafc",
-                padding: "20px 24px",
-                borderRadius: "14px",
-                borderLeft: `4px solid ${riskLevel.color}`,
-                fontSize: "15px",
-                color: "#1e293b",
-                lineHeight: "1.8",
-                fontStyle: "italic",
-              }}
-            >
-              "{result.message}"
-            </div>
-          </div>
-
-          {/* Two Column Analysis */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-              gap: "24px",
-              marginBottom: "32px",
-            }}
-          >
-            {/* Classification Card */}
-            <div
-              style={{
-                background: "white",
-                borderRadius: "20px",
-                padding: "28px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
-                border: "1px solid #f1f5f9",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  marginBottom: "20px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    background:
-                      "linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)",
-                    borderRadius: "14px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "20px",
-                  }}
-                >
-                  🤖
-                </div>
-                <div>
-                  <h3
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "700",
-                      color: "#1e293b",
-                      margin: 0,
-                    }}
-                  >
-                    AI Classification
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "#94a3b8",
-                      margin: 0,
-                    }}
-                  >
-                    AI-Powered Prediction
-                  </p>
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "16px",
-                  background: "#f8fafc",
-                  borderRadius: "12px",
-                  marginBottom: "16px",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: "700",
-                    color: riskLevel.color,
-                    lineHeight: "1.6",
-                    margin: 0,
-                  }}
-                >
-                  {result.prediction || result.classification}
-                </p>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "6px 14px",
-                    background: `${riskLevel.color}15`,
-                    borderRadius: "8px",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: riskLevel.color,
-                  }}
-                >
-                  <FaCheckCircle size={14} />
-                  Confidence: {((result.confidence || 0.85) * 100).toFixed(1)}%
-                </div>
-                {result.reference && (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "6px 14px",
-                      background: "#f1f5f9",
-                      borderRadius: "8px",
-                      fontSize: "13px",
-                      fontWeight: "500",
-                      color: "#64748b",
-                    }}
-                  >
-                    <FaInfoCircle size={14} />
-                    Ref: {result.reference}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Red Flags Card */}
-            <div
-              style={{
-                background: "white",
-                borderRadius: "20px",
-                padding: "28px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
-                border: "1px solid #f1f5f9",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  marginBottom: "20px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    background:
-                      "linear-gradient(135deg, #fa709a20 0%, #fee14020 100%)",
-                    borderRadius: "14px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "20px",
-                  }}
-                >
-                  🚩
-                </div>
-                <div>
-                  <h3
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "700",
-                      color: "#1e293b",
-                      margin: 0,
-                    }}
-                  >
-                    Red Flags Detected
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "#94a3b8",
-                      margin: 0,
-                    }}
-                  >
-                    Key Scam Indicators
-                  </p>
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "16px",
-                  background: "#f8fafc",
-                  borderRadius: "12px",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "14px",
-                    color: "#475569",
-                    lineHeight: "1.7",
-                    margin: 0,
-                  }}
-                >
-                  {result.explanation}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Message Features */}
-          {result.features && (
-            <div
-              style={{
-                background: "white",
-                borderRadius: "20px",
-                padding: "28px",
-                marginBottom: "32px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
-                border: "1px solid #f1f5f9",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  marginBottom: "24px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    background:
-                      "linear-gradient(135deg, #06b6d420 0%, #3b82f620 100%)",
-                    borderRadius: "14px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "20px",
-                  }}
-                >
-                  📊
-                </div>
-                <div>
-                  <h3
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "700",
-                      color: "#1e293b",
-                      margin: 0,
-                    }}
-                  >
-                    Message Analysis Details
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "#94a3b8",
-                      margin: 0,
-                    }}
-                  >
-                    Technical Message Features
-                  </p>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: "12px",
-                }}
-              >
-                {/* Message Length */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: "#f8fafc",
-                    borderRadius: "12px",
-                    border: "1px solid #f1f5f9",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: "#e0f2fe",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#0ea5e9",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaEnvelope />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Message Length
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: "#1e293b",
-                      }}
-                    >
-                      {result.features.length || 0} chars
-                    </div>
-                  </div>
-                </div>
-
-                {/* Uppercase Ratio */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: "#f8fafc",
-                    borderRadius: "12px",
-                    border: "1px solid #f1f5f9",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: "#fef3c7",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#f59e0b",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaHashtag />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Uppercase Ratio
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: "#1e293b",
-                      }}
-                    >
-                      {(result.features.uppercaseRatio || 0 * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contains URL */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: result.features.hasURL ? "#fef2f2" : "#ecfdf5",
-                    borderRadius: "12px",
-                    border: `1px solid ${
-                      result.features.hasURL ? "#fca5a5" : "#6ee7b7"
-                    }`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: result.features.hasURL ? "#fee2e2" : "#d1fae5",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: result.features.hasURL ? "#ef4444" : "#10b981",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaLink />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Contains URL
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: result.features.hasURL ? "#ef4444" : "#10b981",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      {result.features.hasURL ? (
-                        <>
-                          <FaExclamationTriangle size={14} /> Yes
-                        </>
-                      ) : (
-                        <>
-                          <FaCheck size={14} /> No
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contains Phone */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: result.features.hasPhone ? "#fef2f2" : "#ecfdf5",
-                    borderRadius: "12px",
-                    border: `1px solid ${
-                      result.features.hasPhone ? "#fca5a5" : "#6ee7b7"
-                    }`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: result.features.hasPhone ? "#fee2e2" : "#d1fae5",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: result.features.hasPhone ? "#ef4444" : "#10b981",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaPhone />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Contains Phone
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: result.features.hasPhone ? "#ef4444" : "#10b981",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      {result.features.hasPhone ? (
-                        <>
-                          <FaExclamationTriangle size={14} /> Yes
-                        </>
-                      ) : (
-                        <>
-                          <FaCheck size={14} /> No
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Suspicious Keywords */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background:
-                      (result.features.suspiciousKeywordCount || 0) > 0
-                        ? "#fef2f2"
-                        : "#ecfdf5",
-                    borderRadius: "12px",
-                    border: `1px solid ${
-                      (result.features.suspiciousKeywordCount || 0) > 0
-                        ? "#fca5a5"
-                        : "#6ee7b7"
-                    }`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background:
-                        (result.features.suspiciousKeywordCount || 0) > 0
-                          ? "#fee2e2"
-                          : "#d1fae5",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color:
-                        (result.features.suspiciousKeywordCount || 0) > 0
-                          ? "#ef4444"
-                          : "#10b981",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaUserSecret />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Suspicious Keywords
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color:
-                          (result.features.suspiciousKeywordCount || 0) > 0
-                            ? "#ef4444"
-                            : "#10b981",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      {(result.features.suspiciousKeywordCount || 0) > 0 ? (
-                        <>
-                          <FaExclamationTriangle size={14} />{" "}
-                          {result.features.suspiciousKeywordCount} found
-                        </>
-                      ) : (
-                        <>
-                          <FaCheck size={14} /> None
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Special Symbols */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "14px 18px",
-                    background: "#f8fafc",
-                    borderRadius: "12px",
-                    border: "1px solid #f1f5f9",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      background: "#fce4ec",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#e91e63",
-                      fontSize: "16px",
-                    }}
-                  >
-                    <FaHashtag />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        color: "#94a3b8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Special Symbols
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "18px",
-                        fontWeight: "700",
-                        color: "#1e293b",
-                      }}
-                    >
-                      {result.features.specialCharCount || 0}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <h4 style={{ color: "#dc2626", marginBottom: "12px", fontSize: "16px", fontWeight: "700" }}>
+                🚨 Message Phishing Indicators
+              </h4>
+              <ul style={{ margin: 0, paddingLeft: "20px", color: "#475569" }}>
+                {result._raw.messagePhishingReasons.map((reason, index) => (
+                  <li key={index} style={{ marginBottom: "6px" }}>{reason}</li>
+                ))}
+              </ul>
             </div>
           )}
 
-          {/* Detected URLs */}
-          {result.extractedUrls && result.extractedUrls.length > 0 && (
+          {/* URLs Found */}
+          {result._raw?.urlsFound && result._raw.urlsFound.length > 0 && (
             <div
               style={{
-                background: "white",
-                borderRadius: "20px",
-                padding: "28px",
-                marginBottom: "32px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
+                background: "#fef3c7",
+                borderRadius: "16px",
+                padding: "20px",
+                marginBottom: "16px",
                 border: "1px solid #fcd34d",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  marginBottom: "20px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    background: "#fef3c7",
-                    borderRadius: "14px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "20px",
-                  }}
-                >
-                  🔗
-                </div>
-                <div>
-                  <h3
+              <h4 style={{ color: "#d97706", marginBottom: "12px", fontSize: "16px", fontWeight: "700" }}>
+                <FaLink style={{ marginRight: "8px" }} />
+                URLs Found in Message
+              </h4>
+              {result._raw.urlsFound.map((url, index) => {
+                const urlResult = result._raw.urlResults?.[index];
+                return (
+                  <div
+                    key={index}
                     style={{
-                      fontSize: "16px",
-                      fontWeight: "700",
-                      color: "#ed6c02",
-                      margin: 0,
+                      background: "white",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      marginBottom: "8px",
+                      border: "1px solid #e2e8f0",
                     }}
                   >
-                    Suspicious URLs Detected
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "#94a3b8",
-                      margin: 0,
-                    }}
-                  >
-                    {result.extractedUrls.length} suspicious link
-                    {result.extractedUrls.length > 1 ? "s" : ""} found in
-                    message
-                  </p>
-                </div>
-              </div>
-              {result.extractedUrls.map((url, index) => (
-                <div
-                  key={index}
-                  style={{
-                    padding: "12px 16px",
-                    background: "#f8fafc",
-                    borderRadius: "10px",
-                    marginBottom: "8px",
-                    fontFamily: "monospace",
-                    fontSize: "14px",
-                    wordBreak: "break-all",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    border: "1px solid #f1f5f9",
-                  }}
-                >
-                  <span style={{ color: "#ef4444", fontSize: "16px" }}>⚠️</span>
-                  <span style={{ color: "#1e293b" }}>{url}</span>
-                </div>
-              ))}
-              <p
-                style={{
-                  fontSize: "13px",
-                  color: "#ed6c02",
-                  marginTop: "12px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <FaExclamationTriangle size={14} />
-                These URLs have been automatically analyzed and contributed to
-                the risk score.
-              </p>
+                    <p style={{ fontWeight: "600", color: "#1e293b", wordBreak: "break-all" }}>
+                      {url}
+                    </p>
+                    {urlResult && (
+                      <div style={{ marginTop: "8px" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "2px 12px",
+                            borderRadius: "12px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            background: urlResult.prediction === "LEGITIMATE" ? "#d1fae5" : "#fee2e2",
+                            color: urlResult.prediction === "LEGITIMATE" ? "#065f46" : "#dc2626",
+                          }}
+                        >
+                          {urlResult.prediction || "UNKNOWN"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -1696,7 +1143,7 @@ const MessageScanner = () => {
             </p>
           </div>
 
-          {/* Feedback Section */}
+          {/* ✅ FIXED: Feedback Section with Toggle */}
           {showFeedback && !feedbackSubmitted && (
             <div
               style={{
@@ -1740,155 +1187,93 @@ const MessageScanner = () => {
                 </p>
               </div>
 
-              <form onSubmit={handleFeedbackSubmit}>
-                <div style={{ marginBottom: "24px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontWeight: "600",
-                      color: "#1e293b",
-                      fontSize: "14px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    Scan ID
-                  </label>
-                  <input
-                    type="text"
-                    value={feedback.scanId}
-                    disabled
-                    style={{
-                      width: "100%",
-                      padding: "14px 16px",
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "12px",
-                      background: "#f8fafc",
-                      fontSize: "14px",
-                      color: "#64748b",
-                    }}
-                  />
-                </div>
+              <div style={{ marginBottom: "12px", fontSize: "12px", color: "#94a3b8" }}>
+                Scan ID: {scanId || "Not set"}
+              </div>
 
-                <div style={{ marginBottom: "24px" }}>
-                  <label
+              <div style={{ marginBottom: "24px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "12px",
+                    fontWeight: "600",
+                    color: "#1e293b",
+                    fontSize: "14px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Was the detection accurate?
+                </label>
+                <div style={{ display: "flex", gap: "16px" }}>
+                  <button
+                    type="button"
+                    onClick={() => handleAccuracySelect(true)}
                     style={{
-                      display: "block",
-                      marginBottom: "12px",
+                      flex: 1,
+                      padding: "14px",
+                      background:
+                        feedback.isAccurate === true ? "#10b981" : "#f8fafc",
+                      color:
+                        feedback.isAccurate === true ? "white" : "#64748b",
+                      border: feedback.isAccurate === true ? "2px solid #10b981" : "2px solid #e2e8f0",
+                      borderRadius: "14px",
+                      cursor: "pointer",
                       fontWeight: "600",
-                      color: "#1e293b",
-                      fontSize: "14px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    Was the detection accurate?
-                  </label>
-                  <div style={{ display: "flex", gap: "16px" }}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFeedback({ ...feedback, isAccurate: true })
-                      }
-                      style={{
-                        flex: 1,
-                        padding: "14px",
-                        background:
-                          feedback.isAccurate === true ? "#10b981" : "#f8fafc",
-                        color:
-                          feedback.isAccurate === true ? "white" : "#64748b",
-                        border: "none",
-                        borderRadius: "14px",
-                        cursor: "pointer",
-                        fontWeight: "600",
-                        transition: "all 0.3s ease",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <FaThumbsUp />
-                      Yes, accurate
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFeedback({ ...feedback, isAccurate: false })
-                      }
-                      style={{
-                        flex: 1,
-                        padding: "14px",
-                        background:
-                          feedback.isAccurate === false ? "#ef4444" : "#f8fafc",
-                        color:
-                          feedback.isAccurate === false ? "white" : "#64748b",
-                        border: "none",
-                        borderRadius: "14px",
-                        cursor: "pointer",
-                        fontWeight: "600",
-                        transition: "all 0.3s ease",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <FaThumbsDown />
-                      No, inaccurate
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: "24px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "12px",
-                      fontWeight: "600",
-                      color: "#1e293b",
-                      fontSize: "14px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    Rate Detection Quality *
-                  </label>
-                  <div
-                    style={{
+                      transition: "all 0.3s ease",
                       display: "flex",
-                      gap: "8px",
                       alignItems: "center",
-                      flexWrap: "wrap",
+                      justifyContent: "center",
+                      gap: "8px",
                     }}
                   >
-                    {renderStars()}
-                    {feedback.rating > 0 && (
-                      <span
-                        style={{
-                          marginLeft: "16px",
-                          padding: "6px 12px",
-                          background: "#f1f5f9",
-                          borderRadius: "20px",
-                          fontSize: "14px",
-                          color: "#64748b",
-                        }}
-                      >
-                        {feedback.rating === 5
-                          ? "🌟 Excellent!"
-                          : feedback.rating === 4
-                          ? "😊 Good"
-                          : feedback.rating === 3
-                          ? "😐 Average"
-                          : feedback.rating === 2
-                          ? "😕 Poor"
-                          : "😞 Very Poor"}
-                      </span>
+                    <FaThumbsUp />
+                    Yes, accurate
+                    {feedback.isAccurate === true && (
+                      <span style={{ marginLeft: "8px", fontSize: "12px" }}>✓</span>
                     )}
-                  </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAccuracySelect(false)}
+                    style={{
+                      flex: 1,
+                      padding: "14px",
+                      background:
+                        feedback.isAccurate === false ? "#ef4444" : "#f8fafc",
+                      color:
+                        feedback.isAccurate === false ? "white" : "#64748b",
+                      border: feedback.isAccurate === false ? "2px solid #ef4444" : "2px solid #e2e8f0",
+                      borderRadius: "14px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      transition: "all 0.3s ease",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <FaThumbsDown />
+                    No, inaccurate
+                    {feedback.isAccurate === false && (
+                      <span style={{ marginLeft: "8px", fontSize: "12px" }}>✓</span>
+                    )}
+                  </button>
                 </div>
+                {accuracyError && (
+                  <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "8px", textAlign: "center" }}>
+                    ❌ {accuracyError}
+                  </p>
+                )}
+                {accuracySubmitted && feedback.isAccurate !== null && (
+                  <p style={{ fontSize: "12px", color: "#10b981", marginTop: "8px", textAlign: "center" }}>
+                    ✓ Accuracy feedback submitted successfully
+                  </p>
+                )}
+              </div>
 
+              <form onSubmit={handleFeedbackSubmit}>
                 <div style={{ marginBottom: "28px" }}>
                   <label
                     style={{
@@ -1901,7 +1286,7 @@ const MessageScanner = () => {
                       letterSpacing: "0.5px",
                     }}
                   >
-                    Additional Comments
+                    Your Feedback *
                   </label>
                   <textarea
                     rows="4"
@@ -1909,7 +1294,7 @@ const MessageScanner = () => {
                     onChange={(e) =>
                       setFeedback({ ...feedback, comments: e.target.value })
                     }
-                    placeholder="Tell us more about your experience... What could we improve?"
+                    placeholder="Tell us about your experience... What could we improve?"
                     style={{
                       width: "100%",
                       padding: "16px",
@@ -1923,6 +1308,7 @@ const MessageScanner = () => {
                     }}
                     onFocus={(e) => (e.target.style.borderColor = "#f5576c")}
                     onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+                    required
                   />
                   <p
                     style={{
@@ -1967,7 +1353,6 @@ const MessageScanner = () => {
             </div>
           )}
 
-          {/* Thank You Message */}
           {feedbackSubmitted && (
             <div
               style={{
@@ -2005,7 +1390,31 @@ const MessageScanner = () => {
               >
                 Thank You for Your Feedback!
               </h3>
-              <p style={{ color: "#64748b" }}>
+              {feedbackReply && (
+                <div
+                  style={{
+                    padding: "16px",
+                    background: "#f1f5f9",
+                    borderRadius: "12px",
+                    marginTop: "12px",
+                    maxWidth: "480px",
+                    marginLeft: "auto",
+                    marginRight: "auto",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "#475569",
+                      fontStyle: "italic",
+                      margin: 0,
+                    }}
+                  >
+                    💬 "{feedbackReply}"
+                  </p>
+                </div>
+              )}
+              <p style={{ color: "#64748b", marginTop: "12px" }}>
                 Your feedback helps us improve our AI models and make the
                 internet safer for everyone.
               </p>
@@ -2014,7 +1423,6 @@ const MessageScanner = () => {
         </div>
       )}
 
-      {/* Auth Modal */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
@@ -2036,16 +1444,12 @@ const MessageScanner = () => {
             transform: translateY(0);
           }
         }
-
+        
         @keyframes spin {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
-
+        
         .spinning {
           animation: spin 1s linear infinite;
         }

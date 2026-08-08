@@ -60,14 +60,96 @@ const Dashboard = () => {
     fetchDashboardStats();
   }, [isAuthenticated]);
 
+  // Helper function to get prediction from API response
+  const getPrediction = (scan) => {
+    return scan.overallPrediction || scan.prediction || "UNKNOWN";
+  };
+
+  // Helper function to detect scan type
+  const getScanType = (scan) => {
+    // Check if type is explicitly set
+    if (scan.type) {
+      const type = scan.type.toLowerCase();
+      if (type === "url" || type === "message") return type;
+    }
+    if (scan.scanType) {
+      const type = scan.scanType.toLowerCase();
+      if (type === "url" || type === "message") return type;
+      if (type.includes("url")) return "url";
+      if (type.includes("message")) return "message";
+    }
+    // Check if it's a message scan by looking for message field
+    if (scan.message) return "message";
+    // Check if it's a URL scan by looking for url field
+    if (scan.url) return "url";
+    // Check content field
+    if (scan.content) {
+      const content = String(scan.content);
+      if (
+        content.match(/^https?:\/\/[^\s]+/) ||
+        content.match(/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/)
+      ) {
+        return "url";
+      }
+      if (content.length > 50) return "message";
+      return content.length > 20 ? "message" : "url";
+    }
+    // Default to URL
+    return "url";
+  };
+
+  // Helper function to classify a scan based on type and prediction
+  const classifyScan = (scan) => {
+    const type = getScanType(scan);
+    const pred = getPrediction(scan).toUpperCase();
+
+    // Determine if it's a threat (phishing or scam)
+    const isThreat =
+      pred === "PHISHING" ||
+      pred === "DANGEROUS" ||
+      pred === "MALICIOUS" ||
+      pred === "SCAM" ||
+      pred === "SUSPICIOUS" ||
+      pred === "WARNING";
+
+    // For URL scans
+    if (type === "url") {
+      if (pred === "PHISHING" || pred === "DANGEROUS" || pred === "MALICIOUS") {
+        return "phishing";
+      } else if (pred === "SUSPICIOUS" || pred === "WARNING") {
+        return "suspicious_url";
+      } else if (pred === "SAFE" || pred === "LEGITIMATE") {
+        return "safe";
+      }
+      return "unknown";
+    }
+
+    // For Message scans
+    if (type === "message") {
+      if (
+        pred === "PHISHING" ||
+        pred === "DANGEROUS" ||
+        pred === "MALICIOUS" ||
+        pred === "SCAM"
+      ) {
+        return "scam";
+      } else if (pred === "SUSPICIOUS" || pred === "WARNING") {
+        return "suspicious_message";
+      } else if (pred === "SAFE" || pred === "LEGITIMATE") {
+        return "safe";
+      }
+      return "unknown";
+    }
+
+    return "unknown";
+  };
+
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
 
       if (isAuthenticated) {
-        // Fetch scan history
         const historyResponse = await getScanHistory();
-        console.log("History Response:", historyResponse);
 
         let allScans = [];
         if (
@@ -86,39 +168,37 @@ const Dashboard = () => {
           allScans = historyResponse.response;
         }
 
-        // Calculate stats from scans
         const totalScans = allScans.length;
-        const phishingDetected = allScans.filter(
-          (s) =>
-            s.prediction?.toUpperCase() === "PHISHING" ||
-            s.prediction?.toUpperCase() === "DANGEROUS" ||
-            s.prediction?.toUpperCase() === "MALICIOUS",
-        ).length;
 
-        const scamMessages = allScans.filter(
-          (s) =>
-            s.prediction?.toUpperCase() === "SCAM" ||
-            s.prediction?.toUpperCase() === "SUSPICIOUS",
-        ).length;
+        // Count using classifyScan function
+        let phishingDetected = 0;
+        let scamMessages = 0;
+        let safeDetections = 0;
 
-        const safeDetections = allScans.filter(
-          (s) =>
-            s.prediction?.toUpperCase() === "SAFE" ||
-            s.prediction?.toUpperCase() === "LEGITIMATE",
-        ).length;
+        allScans.forEach((scan) => {
+          const classification = classifyScan(scan);
+          if (classification === "phishing") {
+            phishingDetected++;
+          } else if (classification === "scam") {
+            scamMessages++;
+          } else if (classification === "safe") {
+            safeDetections++;
+          }
+        });
 
-        // Format recent scans
-        const recentScans = allScans.slice(0, 5).map((scan) => ({
-          reference: scan.reference,
-          content: scan.url,
-          type: "url",
+        const recentScans = allScans.slice(0, 5).map((scan) => {
+          const type = getScanType(scan);
+          const content = scan.url || scan.message || scan.content || "";
+          return {
+            reference: scan.reference,
+            content: content,
+            type: type,
+            result: getResultFromPrediction(getPrediction(scan)),
+            date: scan.scannedAt,
+            prediction: getPrediction(scan),
+          };
+        });
 
-          result: getResultFromPrediction(scan.prediction),
-          date: scan.scannedAt,
-          prediction: scan.prediction || "UNKNOWN",
-        }));
-
-        // Generate weekly data from scans
         const weeklyData = generateWeeklyDataFromScans(allScans);
 
         setStats({
@@ -130,13 +210,11 @@ const Dashboard = () => {
           weeklyData,
         });
       } else {
-        // Use guest stats
         const guestStats = getGuestStats();
         const guestRecentScans = guestScans.slice(0, 5).map((scan) => ({
           reference: scan.id || scan.reference || `guest_${Date.now()}`,
-          content: scan.content || scan.url || scan.message,
+          content: scan.content || scan.url || scan.message || "",
           type: scan.type || "url",
-
           result: scan.result || "unknown",
           date: scan.date || new Date().toISOString(),
           prediction: scan.prediction || "UNKNOWN",
@@ -156,7 +234,6 @@ const Dashboard = () => {
       if (isAuthenticated) {
         toast.error("Failed to load dashboard data");
       }
-      // Set empty stats
       setStats({
         totalScans: 0,
         phishingDetected: 0,
@@ -170,26 +247,9 @@ const Dashboard = () => {
     }
   };
 
-  const getRiskScoreFromPrediction = (prediction) => {
-    switch (prediction?.toUpperCase()) {
-      case "PHISHING":
-      case "DANGEROUS":
-      case "MALICIOUS":
-        return 85;
-      case "SCAM":
-      case "SUSPICIOUS":
-      case "WARNING":
-        return 55;
-      case "SAFE":
-      case "LEGITIMATE":
-        return 15;
-      default:
-        return 50;
-    }
-  };
-
   const getResultFromPrediction = (prediction) => {
-    switch (prediction?.toUpperCase()) {
+    const pred = prediction?.toUpperCase() || "";
+    switch (pred) {
       case "PHISHING":
       case "DANGEROUS":
       case "MALICIOUS":
@@ -211,7 +271,6 @@ const Dashboard = () => {
     const today = new Date();
     const dayMap = {};
 
-    // Initialize days with zeros
     days.forEach((day, index) => {
       const d = new Date(today);
       d.setDate(d.getDate() - (6 - index));
@@ -219,35 +278,24 @@ const Dashboard = () => {
       dayMap[dateStr] = { day, phishing: 0, scam: 0, safe: 0, date: dateStr };
     });
 
-    // Count scans per day
     scans.forEach((scan) => {
       if (!scan.scannedAt) return;
       const scanDate = new Date(scan.scannedAt);
       const dateStr = scanDate.toISOString().split("T")[0];
 
       if (dayMap[dateStr]) {
-        const prediction = scan.prediction?.toUpperCase() || "";
-        if (
-          prediction === "PHISHING" ||
-          prediction === "DANGEROUS" ||
-          prediction === "MALICIOUS"
-        ) {
+        const classification = classifyScan(scan);
+        if (classification === "phishing") {
           dayMap[dateStr].phishing += 1;
-        } else if (
-          prediction === "SCAM" ||
-          prediction === "SUSPICIOUS" ||
-          prediction === "WARNING"
-        ) {
+        } else if (classification === "scam") {
           dayMap[dateStr].scam += 1;
-        } else if (prediction === "SAFE" || prediction === "LEGITIMATE") {
+        } else if (classification === "safe") {
           dayMap[dateStr].safe += 1;
         }
       }
     });
 
-    // Convert to array and sort
     const result = Object.values(dayMap);
-    // Sort by date
     result.sort((a, b) => a.date.localeCompare(b.date));
     return result;
   };
@@ -275,6 +323,38 @@ const Dashboard = () => {
   const hasWeeklyData = weeklyData.some(
     (d) => d.phishing > 0 || d.scam > 0 || d.safe > 0,
   );
+
+  const totalThreats = stats.phishingDetected + stats.scamMessages;
+
+  const pieData = [
+    {
+      name: "Phishing URLs",
+      value: stats.phishingDetected,
+      color: "#ef4444",
+      percentage:
+        totalThreats > 0
+          ? ((stats.phishingDetected / totalThreats) * 100).toFixed(1)
+          : 0,
+    },
+    {
+      name: "Scam Messages",
+      value: stats.scamMessages,
+      color: "#f59e0b",
+      percentage:
+        totalThreats > 0
+          ? ((stats.scamMessages / totalThreats) * 100).toFixed(1)
+          : 0,
+    },
+    {
+      name: "Safe",
+      value: stats.safeDetections,
+      color: "#10b981",
+      percentage:
+        stats.totalScans > 0
+          ? ((stats.safeDetections / stats.totalScans) * 100).toFixed(1)
+          : 0,
+    },
+  ];
 
   const StatCard = ({
     title,
@@ -335,39 +415,6 @@ const Dashboard = () => {
       )}
     </div>
   );
-
-  const totalThreats =
-    stats.phishingDetected + stats.scamMessages + stats.safeDetections;
-
-  const pieData = [
-    {
-      name: "Phishing URLs",
-      value: stats.phishingDetected,
-      color: "#ef4444",
-      percentage:
-        totalThreats > 0
-          ? ((stats.phishingDetected / totalThreats) * 100).toFixed(1)
-          : 0,
-    },
-    {
-      name: "Scam Messages",
-      value: stats.scamMessages,
-      color: "#f59e0b",
-      percentage:
-        totalThreats > 0
-          ? ((stats.scamMessages / totalThreats) * 100).toFixed(1)
-          : 0,
-    },
-    {
-      name: "Safe",
-      value: stats.safeDetections,
-      color: "#10b981",
-      percentage:
-        totalThreats > 0
-          ? ((stats.safeDetections / totalThreats) * 100).toFixed(1)
-          : 0,
-    },
-  ];
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -492,7 +539,6 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
-      {/* Animated Background */}
       <div className="animated-bg">
         <div
           className="circle"
@@ -563,18 +609,6 @@ const Dashboard = () => {
               color: "#64748b",
               transition: "all 0.3s ease",
               opacity: refreshing ? 0.6 : 1,
-            }}
-            onMouseEnter={(e) => {
-              if (!refreshing) {
-                e.currentTarget.style.background = "#f8fafc";
-                e.currentTarget.style.borderColor = "#667eea";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!refreshing) {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.borderColor = "#e2e8f0";
-              }
             }}
           >
             <FaSync className={refreshing ? "spinning" : ""} size={14} />
@@ -732,17 +766,8 @@ const Dashboard = () => {
               transition: "all 0.3s ease",
               boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
-              e.currentTarget.style.boxShadow = "0 8px 25px rgba(0,0,0,0.3)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0) scale(1)";
-              e.currentTarget.style.boxShadow = "0 4px 15px rgba(0,0,0,0.2)";
-            }}
           >
-            <FaLink />
-            Scan URL
+            <FaLink /> Scan URL
           </button>
           <button
             onClick={() => navigate("/message-scan")}
@@ -761,17 +786,8 @@ const Dashboard = () => {
               transition: "all 0.3s ease",
               backdropFilter: "blur(10px)",
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.3)";
-              e.currentTarget.style.transform = "translateY(-2px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(255,255,255,0.2)";
-              e.currentTarget.style.transform = "translateY(0)";
-            }}
           >
-            <FaComment />
-            Scan Message
+            <FaComment /> Scan Message
           </button>
         </div>
       </div>
@@ -793,7 +809,7 @@ const Dashboard = () => {
           icon={FaExclamationTriangle}
           gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
           trend={hasData ? -5 : 0}
-          subtitle={`${totalThreats > 0 ? ((stats.phishingDetected / totalThreats) * 100).toFixed(1) : 0}% of total`}
+          subtitle={`${totalThreats > 0 ? ((stats.phishingDetected / totalThreats) * 100).toFixed(1) : 0}% of threats`}
           locked={!isAuthenticated}
         />
         <StatCard
@@ -802,7 +818,7 @@ const Dashboard = () => {
           icon={FaEnvelope}
           gradient="linear-gradient(135deg, #fa709a 0%, #fee140 100%)"
           trend={hasData ? 8 : 0}
-          subtitle={`${totalThreats > 0 ? ((stats.scamMessages / totalThreats) * 100).toFixed(1) : 0}% of total`}
+          subtitle={`${totalThreats > 0 ? ((stats.scamMessages / totalThreats) * 100).toFixed(1) : 0}% of threats`}
           locked={!isAuthenticated}
         />
         <StatCard
@@ -811,7 +827,7 @@ const Dashboard = () => {
           icon={FaCheckCircle}
           gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
           trend={hasData ? 15 : 0}
-          subtitle={`${totalThreats > 0 ? ((stats.safeDetections / totalThreats) * 100).toFixed(1) : 0}% of total`}
+          subtitle={`${stats.totalScans > 0 ? ((stats.safeDetections / stats.totalScans) * 100).toFixed(1) : 0}% of total`}
           locked={!isAuthenticated}
         />
       </div>
@@ -918,7 +934,7 @@ const Dashboard = () => {
                 marginLeft: "8px",
               }}
             >
-              ({totalThreats} total)
+              ({totalThreats} threats)
             </span>
           </div>
           {totalThreats > 0 ? (
@@ -1023,8 +1039,7 @@ const Dashboard = () => {
             }}
           >
             Create a free account to permanently save your scans, access them
-            from any device, and unlock premium features like PDF reports and
-            advanced analytics.
+            from any device, and unlock premium features.
           </p>
           <button
             onClick={() => setShowAuthModal(true)}
@@ -1039,16 +1054,6 @@ const Dashboard = () => {
               cursor: "pointer",
               transition: "all 0.3s ease",
               boxShadow: "0 4px 15px rgba(102,126,234,0.4)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow =
-                "0 8px 25px rgba(102,126,234,0.5)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow =
-                "0 4px 15px rgba(102,126,234,0.4)";
             }}
           >
             Sign Up Free
@@ -1098,19 +1103,8 @@ const Dashboard = () => {
               cursor: "pointer",
               transition: "all 0.3s ease",
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
-              e.currentTarget.style.boxShadow =
-                "0 8px 25px rgba(102,126,234,0.4)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0) scale(1)";
-              e.currentTarget.style.boxShadow = "none";
-            }}
           >
-            <FaEye />
-            View All
-            <FaChevronRight size={12} />
+            <FaEye /> View All <FaChevronRight size={12} />
           </button>
         </div>
 
@@ -1120,29 +1114,61 @@ const Dashboard = () => {
               <thead>
                 <tr>
                   <th>Reference</th>
+                  <th>Type</th>
                   <th>Content</th>
                   <th>Prediction</th>
-
                   <th>Date</th>
                 </tr>
               </thead>
               <tbody>
                 {stats.recentScans?.slice(0, 5).map((scan, index) => {
                   const getPredictionColor = (prediction) => {
-                    switch (prediction?.toUpperCase()) {
+                    const pred = prediction?.toUpperCase() || "";
+                    switch (pred) {
                       case "PHISHING":
                         return { bg: "#fee2e2", color: "#dc2626" };
                       case "SCAM":
                         return { bg: "#fef3c7", color: "#d97706" };
                       case "SUSPICIOUS":
                         return { bg: "#fef3c7", color: "#d97706" };
+                      case "WARNING":
+                        return { bg: "#fef3c7", color: "#d97706" };
                       case "SAFE":
+                        return { bg: "#d1fae5", color: "#065f46" };
+                      case "LEGITIMATE":
                         return { bg: "#d1fae5", color: "#065f46" };
                       default:
                         return { bg: "#f1f5f9", color: "#64748b" };
                     }
                   };
+
+                  const getTypeBadge = (type) => {
+                    if (type === "url") {
+                      return {
+                        bg: "#dbeafe",
+                        color: "#1d4ed8",
+                        icon: <FaLink size={12} />,
+                        label: "URL",
+                      };
+                    } else if (type === "message") {
+                      return {
+                        bg: "#fce7f3",
+                        color: "#be185d",
+                        icon: <FaComment size={12} />,
+                        label: "Message",
+                      };
+                    }
+                    return {
+                      bg: "#f1f5f9",
+                      color: "#64748b",
+                      icon: null,
+                      label: "Unknown",
+                    };
+                  };
+
                   const predColor = getPredictionColor(scan.prediction);
+                  const typeBadge = getTypeBadge(scan.type);
+                  const content = scan.content || "N/A";
 
                   return (
                     <tr key={index}>
@@ -1166,15 +1192,33 @@ const Dashboard = () => {
                             : "N/A"}
                         </span>
                       </td>
+                      <td>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "4px 12px",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            background: typeBadge.bg,
+                            color: typeBadge.color,
+                          }}
+                        >
+                          {typeBadge.icon}
+                          {typeBadge.label}
+                        </span>
+                      </td>
                       <td
                         style={{
-                          maxWidth: "250px",
+                          maxWidth: "200px",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {scan.content || "N/A"}
+                        {truncateText(content, 50)}
                       </td>
                       <td>
                         <span
@@ -1190,7 +1234,6 @@ const Dashboard = () => {
                           {scan.prediction || "UNKNOWN"}
                         </span>
                       </td>
-
                       <td style={{ color: "#64748b", fontSize: "14px" }}>
                         <div
                           style={{
@@ -1255,8 +1298,7 @@ const Dashboard = () => {
                 marginBottom: "16px",
               }}
             >
-              Start scanning URLs or messages to see results here. Your scan
-              history will appear in this table.
+              Start scanning URLs or messages to see results here.
             </p>
             <button
               onClick={() => navigate("/url-scan")}
@@ -1271,16 +1313,6 @@ const Dashboard = () => {
                 cursor: "pointer",
                 transition: "all 0.3s ease",
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform =
-                  "translateY(-2px) scale(1.02)";
-                e.currentTarget.style.boxShadow =
-                  "0 8px 25px rgba(102,126,234,0.4)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0) scale(1)";
-                e.currentTarget.style.boxShadow = "none";
-              }}
             >
               Start Scanning
             </button>
@@ -1288,7 +1320,6 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Auth Modal */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
@@ -1300,23 +1331,14 @@ const Dashboard = () => {
       />
 
       <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        .spinning {
-          animation: spin 1s linear infinite;
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spinning { animation: spin 1s linear infinite; }
       `}</style>
     </div>
   );
 };
 
-// Helper function for formatting date
 const formatDate = (date) => {
   if (!date) return "N/A";
   return new Date(date).toLocaleString("en-US", {
@@ -1329,7 +1351,6 @@ const formatDate = (date) => {
   });
 };
 
-// Helper function for truncating text
 const truncateText = (text, maxLength = 100) => {
   if (!text) return "N/A";
   if (text.length <= maxLength) return text;

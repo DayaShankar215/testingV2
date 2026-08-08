@@ -12,7 +12,6 @@ import { useGuest } from "../context/GuestContext";
 import AuthModal from "../components/common/AuthModal";
 import {
   FaSearch,
-  FaDownload,
   FaEye,
   FaChartLine,
   FaCalendar,
@@ -21,13 +20,16 @@ import {
   FaEnvelope,
   FaTrashAlt,
   FaSpinner,
-  FaExclamationTriangle,
   FaCalendarAlt,
   FaTimes,
   FaHashtag,
   FaUserPlus,
   FaInfoCircle,
   FaFilePdf,
+  FaComment,
+  FaSortNumericDown,
+  FaChevronDown,
+  FaChevronUp,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -41,13 +43,20 @@ const History = () => {
   const [downloadingId, setDownloadingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({
+    phishing: true,
+    legitimate: true,
+    urls: true,
+    urlPhishing: true,
+    urlLegitimate: true,
+  });
   const [stats, setStats] = useState({
     total: 0,
     url: 0,
     message: 0,
   });
 
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { scans: guestScans } = useGuest();
 
   const [dateFilter, setDateFilter] = useState({
@@ -56,6 +65,26 @@ const History = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempStartDate, setTempStartDate] = useState("");
   const [tempEndDate, setTempEndDate] = useState("");
+
+  const getPrediction = (scan) => {
+    return scan.overallPrediction || scan.prediction || "UNKNOWN";
+  };
+
+  const getScanType = (scan) => {
+    if (scan.type) return scan.type;
+    if (scan.scanType) {
+      const type = scan.scanType.toLowerCase();
+      if (type === "url" || type === "message") return type;
+    }
+    if (scan.message) return "message";
+    if (scan.url) return "url";
+    if (scan.content) {
+      const content = scan.content || "";
+      if (content.match(/^https?:\/\/[^\s]+/)) return "url";
+      return "message";
+    }
+    return "url";
+  };
 
   useEffect(() => {
     fetchHistory();
@@ -78,21 +107,36 @@ const History = () => {
           scansData = response.scans;
         } else if (Array.isArray(response)) {
           scansData = response;
-        } else if (response && response.response && Array.isArray(response.response)) {
-          scansData = response.response;
         }
 
-        const formattedScans = scansData.map((scan) => ({
-          reference: scan.reference,
-          url: scan.url,
-          prediction: scan.prediction,
-          conclusion: scan.conclusion,
-          scannedAt: scan.scannedAt,
-          type: "url",
-          content: scan.url,
-          _raw: scan,
-        }));
-
+        const formattedScans = scansData.map((scan) => {
+          const type = getScanType(scan);
+          return {
+            reference: scan.reference,
+            url: scan.url || scan.content,
+            prediction: getPrediction(scan),
+            conclusion: scan.conclusion,
+            scannedAt: scan.scannedAt,
+            type: type,
+            content: scan.url || scan.message || scan.content || scan.url,
+            scanType: scan.scanType,
+            message: scan.message,
+            messagePrediction: scan.messagePrediction,
+            messagePhishingReasons: scan.messagePhishingReasons || [],
+            messageLegitimateReasons: scan.messageLegitimateReasons || [],
+            urlsFound: scan.urlsFound || [],
+            urlResults: scan.urlResults || [],
+            phishingReasons: scan.phishingReasons || [],
+            legitimateReasons: scan.legitimateReasons || [],
+            _raw: scan,
+          };
+        });
+        //Sorting based on new scan
+        formattedScans.sort((a, b) => {
+          const dateA = new Date(a.scannedAt || a.date || a.timestamp || 0);
+          const dateB = new Date(b.scannedAt || b.date || b.timestamp || 0);
+          return dateB - dateA; // Descending: newest first
+        });
         setScans(formattedScans);
       } else {
         const guestFiltered =
@@ -133,7 +177,11 @@ const History = () => {
 
     return scansList.filter((scan) => {
       const scanDate = new Date(
-        scan?.scannedAt || scan?.date || scan?.timestamp || scan?.createdAt
+        scan?.scannedAt ||
+          scan?.date ||
+          scan?.timestamp ||
+          scan?.createdAt ||
+          Date.now(),
       );
 
       switch (dateFilter.preset) {
@@ -166,7 +214,6 @@ const History = () => {
     if (preset !== "custom") {
       setTempStartDate("");
       setTempEndDate("");
-      toast.success(`Filter applied: ${getDateFilterLabel(preset)}`);
     }
   };
 
@@ -185,7 +232,6 @@ const History = () => {
     setTempStartDate("");
     setTempEndDate("");
     setShowDatePicker(false);
-    toast.success("Date filter cleared");
   };
 
   const getDateFilterLabel = (preset = null) => {
@@ -200,9 +246,6 @@ const History = () => {
       case "month":
         return "Last 30 Days";
       case "custom":
-        if (tempStartDate && tempEndDate) {
-          return "Custom Range";
-        }
         return "Custom Range";
       default:
         return "All Time";
@@ -218,15 +261,30 @@ const History = () => {
     try {
       const response = await getScanByReference(reference);
       console.log("Scan Details Response:", response);
-      
+
+      const isMessageScan = response.scanType === "MESSAGE" || response.message;
+
       setSelectedScan({
         reference: response.reference,
-        url: response.url,
-        prediction: response.prediction,
-        legitimateReasons: response.legitimateReasons || [],
-        phishingReasons: response.phishingReasons || [],
+        url: response.url || response.message || "",
+        prediction: getPrediction(response),
+        legitimateReasons:
+          response.legitimateReasons || response.messageLegitimateReasons || [],
+        phishingReasons:
+          response.phishingReasons || response.messagePhishingReasons || [],
         conclusion: response.conclusion,
         scannedAt: response.scannedAt,
+        isMessageScan: isMessageScan,
+        message: response.message,
+        scanType: response.scanType,
+        messagePrediction: response.messagePrediction,
+        messagePhishingReasons: response.messagePhishingReasons || [],
+        messageLegitimateReasons: response.messageLegitimateReasons || [],
+        urlsFound: response.urlsFound || [],
+        urlResults: response.urlResults || [],
+        overallPrediction: response.overallPrediction,
+        explanation: response.explanation,
+        _raw: response,
       });
       setShowModal(true);
     } catch (error) {
@@ -248,33 +306,45 @@ const History = () => {
 
     try {
       const scanDetails = await getScanByReference(reference);
-      console.log("Scan Details:", scanDetails);
-      
+      console.log("Scan Details for PDF:", scanDetails);
+
+      const isMessageScan =
+        scanDetails.scanType === "MESSAGE" || scanDetails.message;
+
       const pdfData = {
         reference: scanDetails.reference,
-        url: scanDetails.url,
-        prediction: scanDetails.prediction,
-        conclusion: scanDetails.conclusion,
+        url: isMessageScan ? "" : scanDetails.url || "",
+        message: scanDetails.message || "",
+        prediction: getPrediction(scanDetails),
+        conclusion: scanDetails.conclusion || "Analysis completed",
         scannedAt: scanDetails.scannedAt,
+        scanType: scanDetails.scanType || (isMessageScan ? "MESSAGE" : "URL"),
+        messagePrediction: scanDetails.messagePrediction,
+        messagePhishingReasons: scanDetails.messagePhishingReasons || [],
+        messageLegitimateReasons: scanDetails.messageLegitimateReasons || [],
+        urlsFound: scanDetails.urlsFound || [],
+        urlResults: scanDetails.urlResults || [],
         phishingReasons: scanDetails.phishingReasons || [],
         legitimateReasons: scanDetails.legitimateReasons || [],
+        overallPrediction: scanDetails.overallPrediction,
+        explanation: scanDetails.explanation,
+        _raw: scanDetails,
       };
-      
-      const { downloadPDF } = await import('../services/pdfGenerator');
-      downloadPDF(pdfData, 'url');
-      
+
+      const { downloadPDF } = await import("../services/pdfGenerator");
+      downloadPDF(pdfData, isMessageScan ? "message" : "url");
+
       toast.success("PDF report downloaded successfully!", { id: toastId });
     } catch (error) {
       console.error("Download Error:", error);
-      toast.error(error.message || "Failed to download report", { id: toastId });
+      toast.error(error.message || "Failed to download report", {
+        id: toastId,
+      });
     } finally {
       setDownloadingId(null);
     }
   };
 
-  
-
-  // ========== DELETE SCAN - SIMPLIFIED ==========
   const handleDeleteScan = async (reference) => {
     if (!isAuthenticated) {
       setShowAuthModal(true);
@@ -283,7 +353,11 @@ const History = () => {
 
     if (deletingId === reference) return;
 
-    if (!window.confirm("Are you sure you want to delete this scan? This action cannot be undone.")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this scan? This action cannot be undone.",
+      )
+    ) {
       return;
     }
 
@@ -291,22 +365,49 @@ const History = () => {
     const toastId = toast.loading("Deleting scan...");
 
     try {
-      // This will now send the token properly
+      console.log(`[DELETE] Deleting scan: ${reference}`);
+
       const response = await deleteScanByReference(reference);
-      
-      toast.success(response?.message || "Scan deleted successfully!", { id: toastId });
+      console.log("[DELETE] Success:", response);
+
+      toast.success("Scan deleted successfully!", { id: toastId });
 
       setScans((prev) => prev.filter((scan) => scan.reference !== reference));
-      await fetchHistory();
+      calculateStats();
     } catch (error) {
-      console.error("Delete Error:", error);
-      
-      if (error.status === 401) {
-        toast.error("Please login again to delete scans", { id: toastId });
-        setTimeout(() => logout(), 1500);
-      } else {
-        toast.error(error.message || "Failed to delete scan", { id: toastId });
+      console.error("[DELETE] Error:", error);
+
+      if (error.status === 403) {
+        toast.error(`🔒 ${error.message || "Permission denied"}`, {
+          id: toastId,
+          duration: 5000,
+        });
+        return;
       }
+
+      if (error.status === 404) {
+        toast.success("Scan already deleted.", { id: toastId });
+        setScans((prev) => prev.filter((scan) => scan.reference !== reference));
+        calculateStats();
+        return;
+      }
+
+      if (error.status === 401) {
+        toast.error("Session expired. Please login again.", { id: toastId });
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("user");
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
+
+      if (error.isCorsError || error.status === 0) {
+        toast.error("Cannot connect to server. Please check your connection.", {
+          id: toastId,
+        });
+        return;
+      }
+
+      toast.error(error?.message || "Failed to delete scan", { id: toastId });
     } finally {
       setDeletingId(null);
     }
@@ -317,9 +418,19 @@ const History = () => {
 
     const searchLower = term.toLowerCase().trim();
     const reference = (scan?.reference || "").toString().toLowerCase();
-    const content = (scan?.content || scan?.url || scan?.message || "").toLowerCase();
+    const content = (
+      scan?.content ||
+      scan?.url ||
+      scan?.message ||
+      ""
+    ).toLowerCase();
+    const type = (scan?.type || "").toLowerCase();
 
-    return reference.includes(searchLower) || content.includes(searchLower);
+    return (
+      reference.includes(searchLower) ||
+      content.includes(searchLower) ||
+      type.includes(searchLower)
+    );
   };
 
   const filteredScans = (() => {
@@ -338,143 +449,59 @@ const History = () => {
     return filtered;
   })();
 
+  const getPredictionColor = (pred) => {
+    const upperPred = pred?.toUpperCase() || "";
+    switch (upperPred) {
+      case "PHISHING":
+      case "DANGEROUS":
+      case "MALICIOUS":
+        return { bg: "#fee2e2", color: "#dc2626" };
+      case "SCAM":
+        return { bg: "#fef3c7", color: "#d97706" };
+      case "SUSPICIOUS":
+      case "WARNING":
+        return { bg: "#fef3c7", color: "#d97706" };
+      case "SAFE":
+      case "LEGITIMATE":
+        return { bg: "#d1fae5", color: "#065f46" };
+      default:
+        return { bg: "#f1f5f9", color: "#64748b" };
+    }
+  };
+
+  const getTypeBadge = (type) => {
+    if (type === "url") {
+      return {
+        bg: "#dbeafe",
+        color: "#1d4ed8",
+        icon: <FaLink size={12} />,
+        label: "URL",
+      };
+    } else if (type === "message") {
+      return {
+        bg: "#fce7f3",
+        color: "#be185d",
+        icon: <FaComment size={12} />,
+        label: "Message",
+      };
+    }
+    return { bg: "#f1f5f9", color: "#64748b", icon: null, label: "Unknown" };
+  };
+
+  const toggleSection = (section) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
   if (loading) {
     return <LoadingSpinner text="Loading security history..." />;
   }
 
-  if (!isAuthenticated && scans.length === 0) {
-    return (
-      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "40px 24px" }}>
-        <div style={{ textAlign: "center", marginBottom: "48px" }}>
-          <h1
-            style={{
-              fontSize: "48px",
-              fontWeight: "800",
-              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-              color: "transparent",
-              marginBottom: "12px",
-            }}
-          >
-            Security History
-          </h1>
-          <p style={{ fontSize: "18px", color: "#64748b" }}>
-            Track and analyze all your security scans
-          </p>
-        </div>
-
-        <div
-          style={{
-            background: "white",
-            borderRadius: "24px",
-            padding: "60px 40px",
-            textAlign: "center",
-            boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
-          }}
-        >
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #667eea20 0%, #764ba220 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 24px",
-            }}
-          >
-            <FaShieldAlt style={{ fontSize: "48px", color: "#667eea" }} />
-          </div>
-          <h2
-            style={{
-              fontSize: "28px",
-              fontWeight: "700",
-              color: "#1e293b",
-              marginBottom: "12px",
-            }}
-          >
-            No Scans Yet
-          </h2>
-          <p
-            style={{
-              fontSize: "16px",
-              color: "#64748b",
-              maxWidth: "480px",
-              margin: "0 auto 8px",
-            }}
-          >
-            You haven't performed any scans yet. Start scanning URLs and messages
-            to see results here.
-          </p>
-          <p
-            style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "24px" }}
-          >
-            Sign up to save your scan history permanently and access it from any
-            device.
-          </p>
-          <div
-            style={{
-              display: "flex",
-              gap: "12px",
-              justifyContent: "center",
-              flexWrap: "wrap",
-            }}
-          >
-            <button
-              onClick={() => (window.location.href = "/url-scan")}
-              style={{
-                padding: "12px 28px",
-                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                color: "white",
-                border: "none",
-                borderRadius: "12px",
-                fontSize: "16px",
-                fontWeight: "600",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                boxShadow: "0 4px 15px rgba(102,126,234,0.4)",
-              }}
-            >
-              Start Scanning
-            </button>
-            <button
-              onClick={() => setShowAuthModal(true)}
-              style={{
-                padding: "12px 28px",
-                background: "white",
-                color: "#667eea",
-                border: "2px solid #667eea",
-                borderRadius: "12px",
-                fontSize: "16px",
-                fontWeight: "600",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <FaUserPlus style={{ marginRight: "8px" }} />
-              Sign Up to Save
-            </button>
-          </div>
-        </div>
-
-        <AuthModal
-          isOpen={showAuthModal}
-          onClose={() => setShowAuthModal(false)}
-          initialMode="register"
-          onSuccess={() => {
-            setShowAuthModal(false);
-            fetchHistory();
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "40px 24px" }}>
-      {/* Header Stats */}
+      {/* Header */}
       <div style={{ marginBottom: "48px" }}>
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
           <h1
@@ -493,45 +520,8 @@ const History = () => {
           <p style={{ fontSize: "18px", color: "#64748b" }}>
             Track and analyze all your security scans
           </p>
-
-          {!isAuthenticated && scans.length > 0 && (
-            <div
-              style={{
-                marginTop: "12px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "8px 20px",
-                background: "#fef3c7",
-                borderRadius: "100px",
-                border: "1px solid #fcd34d",
-              }}
-            >
-              <FaInfoCircle style={{ color: "#d97706" }} />
-              <span style={{ fontSize: "14px", color: "#92400e" }}>
-                Guest Mode • History is temporary
-              </span>
-              <button
-                onClick={() => setShowAuthModal(true)}
-                style={{
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  color: "white",
-                  border: "none",
-                  padding: "4px 16px",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Sign Up to Save
-              </button>
-            </div>
-          )}
         </div>
 
-        {/* Stats Cards */}
         <div
           style={{
             display: "grid",
@@ -549,12 +539,20 @@ const History = () => {
             }}
           >
             <FaChartLine
-              style={{ fontSize: "32px", color: "#667eea", marginBottom: "12px" }}
+              style={{
+                fontSize: "32px",
+                color: "#667eea",
+                marginBottom: "12px",
+              }}
             />
-            <div style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}>
+            <div
+              style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}
+            >
               {stats.total}
             </div>
-            <div style={{ fontSize: "14px", color: "#64748b" }}>Total Scans</div>
+            <div style={{ fontSize: "14px", color: "#64748b" }}>
+              Total Scans
+            </div>
           </div>
           <div
             style={{
@@ -566,9 +564,15 @@ const History = () => {
             }}
           >
             <FaLink
-              style={{ fontSize: "32px", color: "#3b82f6", marginBottom: "12px" }}
+              style={{
+                fontSize: "32px",
+                color: "#3b82f6",
+                marginBottom: "12px",
+              }}
             />
-            <div style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}>
+            <div
+              style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}
+            >
               {stats.url}
             </div>
             <div style={{ fontSize: "14px", color: "#64748b" }}>URL Scans</div>
@@ -583,12 +587,20 @@ const History = () => {
             }}
           >
             <FaEnvelope
-              style={{ fontSize: "32px", color: "#f5576c", marginBottom: "12px" }}
+              style={{
+                fontSize: "32px",
+                color: "#f5576c",
+                marginBottom: "12px",
+              }}
             />
-            <div style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}>
+            <div
+              style={{ fontSize: "32px", fontWeight: "800", color: "#1e293b" }}
+            >
               {stats.message}
             </div>
-            <div style={{ fontSize: "14px", color: "#64748b" }}>Message Scans</div>
+            <div style={{ fontSize: "14px", color: "#64748b" }}>
+              Message Scans
+            </div>
           </div>
         </div>
       </div>
@@ -622,8 +634,8 @@ const History = () => {
               {type === "all"
                 ? "All Scans"
                 : type === "url"
-                ? "URL Scans"
-                : "Message Scans"}
+                  ? "URL Scans"
+                  : "Message Scans"}
             </button>
           ))}
         </div>
@@ -679,7 +691,7 @@ const History = () => {
           />
           <input
             type="text"
-            placeholder="Search by reference ID or content..."
+            placeholder="Search by reference ID, content or type..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -721,8 +733,10 @@ const History = () => {
               marginBottom: "16px",
             }}
           >
-            <h3 style={{ fontSize: "16px", fontWeight: "600", color: "#1e293b" }}>
-              <FaCalendarAlt style={{ marginRight: "8px", color: "#667eea" }} />
+            <h3
+              style={{ fontSize: "16px", fontWeight: "600", color: "#1e293b" }}
+            >
+              <FaCalendarAlt style={{ marginRight: "8px", color: "#667eea" }} />{" "}
               Filter by Date
             </h3>
             <button
@@ -846,7 +860,8 @@ const History = () => {
                 onClick={handleCustomDateApply}
                 style={{
                   padding: "10px 24px",
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  background:
+                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                   color: "white",
                   border: "none",
                   borderRadius: "10px",
@@ -859,33 +874,6 @@ const History = () => {
               </button>
             </div>
           )}
-
-          <div
-            style={{
-              marginTop: "12px",
-              fontSize: "12px",
-              color: "#94a3b8",
-              display: "flex",
-              justifyContent: "space-between",
-            }}
-          >
-            <span>Showing {filteredScans.length} scans</span>
-            {dateFilter.preset !== "all" && (
-              <button
-                onClick={clearDateFilter}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#ef4444",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                  fontSize: "12px",
-                }}
-              >
-                Clear Filter
-              </button>
-            )}
-          </div>
         </div>
       )}
 
@@ -913,8 +901,7 @@ const History = () => {
         </span>
         {dateFilter.preset !== "all" && (
           <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-            <FaCalendarAlt size={12} />
-            {getDateFilterLabel()}
+            <FaCalendarAlt size={12} /> {getDateFilterLabel()}
           </span>
         )}
       </div>
@@ -943,9 +930,31 @@ const History = () => {
                     textAlign: "left",
                     fontWeight: "600",
                     color: "#475569",
+                    width: "60px",
+                  }}
+                >
+                  <FaSortNumericDown style={{ marginRight: "4px" }} />
+                  S.No
+                </th>
+                <th
+                  style={{
+                    padding: "20px",
+                    textAlign: "left",
+                    fontWeight: "600",
+                    color: "#475569",
                   }}
                 >
                   Reference
+                </th>
+                <th
+                  style={{
+                    padding: "20px",
+                    textAlign: "left",
+                    fontWeight: "600",
+                    color: "#475569",
+                  }}
+                >
+                  Type
                 </th>
                 <th
                   style={{
@@ -993,8 +1002,12 @@ const History = () => {
               {filteredScans.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="5"
-                    style={{ textAlign: "center", padding: "80px", color: "#94a3b8" }}
+                    colSpan="7"
+                    style={{
+                      textAlign: "center",
+                      padding: "80px",
+                      color: "#94a3b8",
+                    }}
                   >
                     <FaShieldAlt
                       style={{
@@ -1024,35 +1037,20 @@ const History = () => {
                   </td>
                 </tr>
               ) : (
-                filteredScans.map((scan) => {
+                filteredScans.map((scan, index) => {
                   const reference = scan?.reference;
                   const isDownloading = downloadingId === reference;
                   const isDeleting = deletingId === reference;
                   const isGuest = scan?.isGuest === true;
                   const prediction = scan?.prediction || "UNKNOWN";
-
-                  const getPredictionColor = (pred) => {
-                    switch (pred?.toUpperCase()) {
-                      case "PHISHING":
-                      case "DANGEROUS":
-                      case "MALICIOUS":
-                        return { bg: "#fee2e2", color: "#dc2626" };
-                      case "SUSPICIOUS":
-                      case "WARNING":
-                        return { bg: "#fef3c7", color: "#d97706" };
-                      case "SAFE":
-                      case "LEGITIMATE":
-                        return { bg: "#d1fae5", color: "#065f46" };
-                      default:
-                        return { bg: "#f1f5f9", color: "#64748b" };
-                    }
-                  };
-
                   const predColor = getPredictionColor(prediction);
+                  const typeBadge = getTypeBadge(scan?.type);
+
+                  const showDelete = isAuthenticated && !isGuest;
 
                   return (
                     <tr
-                      key={reference || Math.random()}
+                      key={reference || `scan_${index}`}
                       style={{
                         borderBottom: "1px solid #f1f5f9",
                         transition: "background 0.3s",
@@ -1070,6 +1068,16 @@ const History = () => {
                       <td
                         style={{
                           padding: "16px 20px",
+                          color: "#94a3b8",
+                          fontSize: "14px",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {index + 1}
+                      </td>
+                      <td
+                        style={{
+                          padding: "16px 20px",
                           fontWeight: "600",
                           color: "#667eea",
                           fontSize: "13px",
@@ -1077,7 +1085,11 @@ const History = () => {
                         }}
                       >
                         <span
-                          style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
                         >
                           <FaHashtag size={10} style={{ opacity: 0.5 }} />
                           {reference ? truncateText(reference, 20) : "N/A"}
@@ -1098,9 +1110,25 @@ const History = () => {
                           )}
                         </span>
                       </td>
-                      <td
-                        style={{ padding: "16px 20px", maxWidth: "300px" }}
-                      >
+                      <td style={{ padding: "16px 20px" }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "4px 12px",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            background: typeBadge.bg,
+                            color: typeBadge.color,
+                          }}
+                        >
+                          {typeBadge.icon}
+                          {typeBadge.label}
+                        </span>
+                      </td>
+                      <td style={{ padding: "16px 20px", maxWidth: "300px" }}>
                         <div
                           style={{
                             overflow: "hidden",
@@ -1110,7 +1138,10 @@ const History = () => {
                           }}
                           title={scan?.content || scan?.url || "N/A"}
                         >
-                          {truncateText(scan?.content || scan?.url || "N/A", 50)}
+                          {truncateText(
+                            scan?.content || scan?.url || "N/A",
+                            50,
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: "16px 20px" }}>
@@ -1135,14 +1166,18 @@ const History = () => {
                         }}
                       >
                         <div
-                          style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
                         >
                           <FaCalendar size={12} />
                           {formatDate(
                             scan?.scannedAt ||
                               scan?.date ||
                               scan?.timestamp ||
-                              Date.now()
+                              Date.now(),
                           )}
                         </div>
                       </td>
@@ -1155,7 +1190,9 @@ const History = () => {
                               background: "none",
                               border: "none",
                               color: isAuthenticated ? "#667eea" : "#94a3b8",
-                              cursor: isAuthenticated ? "pointer" : "not-allowed",
+                              cursor: isAuthenticated
+                                ? "pointer"
+                                : "not-allowed",
                               padding: "6px",
                               borderRadius: "8px",
                               transition: "background 0.3s",
@@ -1177,8 +1214,8 @@ const History = () => {
                               color: isDownloading
                                 ? "#94a3b8"
                                 : isAuthenticated
-                                ? "#64748b"
-                                : "#94a3b8",
+                                  ? "#64748b"
+                                  : "#94a3b8",
                               cursor:
                                 isDownloading || !isAuthenticated
                                   ? "not-allowed"
@@ -1202,40 +1239,32 @@ const History = () => {
                               <FaFilePdf />
                             )}
                           </button>
-                          <button
-                            onClick={() => handleDeleteScan(reference)}
-                            disabled={isDeleting || !isAuthenticated}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: isDeleting
-                                ? "#94a3b8"
-                                : isAuthenticated
-                                ? "#ef4444"
-                                : "#94a3b8",
-                              cursor:
-                                isDeleting || !isAuthenticated
-                                  ? "not-allowed"
-                                  : "pointer",
-                              padding: "6px",
-                              borderRadius: "8px",
-                              transition: "all 0.3s",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                            title={
-                              isAuthenticated
-                                ? "Delete scan"
-                                : "Sign in to delete"
-                            }
-                          >
-                            {isDeleting ? (
-                              <FaSpinner className="spinning" size={14} />
-                            ) : (
-                              <FaTrashAlt />
-                            )}
-                          </button>
+
+                          {showDelete && (
+                            <button
+                              onClick={() => handleDeleteScan(reference)}
+                              disabled={isDeleting}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: isDeleting ? "#94a3b8" : "#ef4444",
+                                cursor: isDeleting ? "not-allowed" : "pointer",
+                                padding: "6px",
+                                borderRadius: "8px",
+                                transition: "all 0.3s",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                              title="Delete scan"
+                            >
+                              {isDeleting ? (
+                                <FaSpinner className="spinning" size={14} />
+                              ) : (
+                                <FaTrashAlt />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1270,7 +1299,7 @@ const History = () => {
             style={{
               background: "white",
               borderRadius: "32px",
-              maxWidth: "700px",
+              maxWidth: "800px",
               width: "100%",
               maxHeight: "85vh",
               overflow: "auto",
@@ -1288,10 +1317,15 @@ const History = () => {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                zIndex: 10,
               }}
             >
               <h2
-                style={{ fontSize: "24px", fontWeight: "700", color: "#1e293b" }}
+                style={{
+                  fontSize: "24px",
+                  fontWeight: "700",
+                  color: "#1e293b",
+                }}
               >
                 Scan Details
               </h2>
@@ -1306,6 +1340,9 @@ const History = () => {
                   cursor: "pointer",
                   fontSize: "20px",
                   transition: "all 0.3s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 ✕
@@ -1322,6 +1359,7 @@ const History = () => {
                     color: "#64748b",
                     marginBottom: "8px",
                     textTransform: "uppercase",
+                    letterSpacing: "0.5px",
                   }}
                 >
                   Reference
@@ -1340,7 +1378,7 @@ const History = () => {
                 </div>
               </div>
 
-              {/* URL */}
+              {/* Type */}
               <div style={{ marginBottom: "24px" }}>
                 <h3
                   style={{
@@ -1349,9 +1387,44 @@ const History = () => {
                     color: "#64748b",
                     marginBottom: "8px",
                     textTransform: "uppercase",
+                    letterSpacing: "0.5px",
                   }}
                 >
-                  URL
+                  Scan Type
+                </h3>
+                <div
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: "12px",
+                    background:
+                      selectedScan.scanType === "MESSAGE"
+                        ? "#fce7f3"
+                        : "#dbeafe",
+                    color:
+                      selectedScan.scanType === "MESSAGE"
+                        ? "#be185d"
+                        : "#1d4ed8",
+                    fontWeight: "600",
+                  }}
+                >
+                  {selectedScan.scanType ||
+                    (selectedScan.isMessageScan ? "MESSAGE" : "URL")}
+                </div>
+              </div>
+
+              {/* Content */}
+              <div style={{ marginBottom: "24px" }}>
+                <h3
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    color: "#64748b",
+                    marginBottom: "8px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  {selectedScan.isMessageScan ? "Message" : "URL"}
                 </h3>
                 <div
                   style={{
@@ -1360,13 +1433,17 @@ const History = () => {
                     borderRadius: "12px",
                     color: "#1e293b",
                     wordBreak: "break-all",
+                    maxHeight: "100px",
+                    overflow: "auto",
                   }}
                 >
-                  {selectedScan.url}
+                  {selectedScan.isMessageScan
+                    ? selectedScan.message || selectedScan.url
+                    : selectedScan.url}
                 </div>
               </div>
 
-              {/* Prediction */}
+              {/* Overall Prediction */}
               <div style={{ marginBottom: "24px" }}>
                 <h3
                   style={{
@@ -1375,128 +1452,529 @@ const History = () => {
                     color: "#64748b",
                     marginBottom: "8px",
                     textTransform: "uppercase",
+                    letterSpacing: "0.5px",
                   }}
                 >
-                  Prediction
+                  Overall Prediction
                 </h3>
                 <div
                   style={{
                     padding: "12px 16px",
                     borderRadius: "12px",
                     background:
-                      selectedScan.prediction === "PHISHING"
+                      selectedScan.prediction === "PHISHING" ||
+                      selectedScan.prediction === "DANGEROUS" ||
+                      selectedScan.prediction === "MALICIOUS"
                         ? "#fee2e2"
+                        : selectedScan.prediction === "SUSPICIOUS" ||
+                          selectedScan.prediction === "WARNING" ||
+                          selectedScan.prediction === "SCAM"
+                        ? "#fef3c7"
                         : "#d1fae5",
                     color:
-                      selectedScan.prediction === "PHISHING"
+                      selectedScan.prediction === "PHISHING" ||
+                      selectedScan.prediction === "DANGEROUS" ||
+                      selectedScan.prediction === "MALICIOUS"
                         ? "#dc2626"
+                        : selectedScan.prediction === "SUSPICIOUS" ||
+                          selectedScan.prediction === "WARNING" ||
+                          selectedScan.prediction === "SCAM"
+                        ? "#d97706"
                         : "#065f46",
                     fontWeight: "600",
                   }}
                 >
-                  {selectedScan.prediction}
+                  {selectedScan.overallPrediction || selectedScan.prediction}
                 </div>
               </div>
 
-              {/* Phishing Reasons */}
-              {selectedScan.phishingReasons &&
+              {/* Message Prediction (for message scans) */}
+              {selectedScan.isMessageScan && selectedScan.messagePrediction && (
+                <div style={{ marginBottom: "24px" }}>
+                  <h3
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#64748b",
+                      marginBottom: "8px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    Message Prediction
+                  </h3>
+                  <div
+                    style={{
+                      padding: "12px 16px",
+                      borderRadius: "12px",
+                      background:
+                        selectedScan.messagePrediction === "PHISHING" ||
+                        selectedScan.messagePrediction === "DANGEROUS" ||
+                        selectedScan.messagePrediction === "MALICIOUS"
+                          ? "#fee2e2"
+                          : selectedScan.messagePrediction === "SUSPICIOUS" ||
+                            selectedScan.messagePrediction === "WARNING" ||
+                            selectedScan.messagePrediction === "SCAM"
+                          ? "#fef3c7"
+                          : "#d1fae5",
+                      color:
+                        selectedScan.messagePrediction === "PHISHING" ||
+                        selectedScan.messagePrediction === "DANGEROUS" ||
+                        selectedScan.messagePrediction === "MALICIOUS"
+                          ? "#dc2626"
+                          : selectedScan.messagePrediction === "SUSPICIOUS" ||
+                            selectedScan.messagePrediction === "WARNING" ||
+                            selectedScan.messagePrediction === "SCAM"
+                          ? "#d97706"
+                          : "#065f46",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {selectedScan.messagePrediction}
+                  </div>
+                </div>
+              )}
+
+              {/* ============================================================ */}
+              {/* MESSAGE PHISHING REASONS */}
+              {/* ============================================================ */}
+              {selectedScan.isMessageScan &&
+                selectedScan.messagePhishingReasons &&
+                selectedScan.messagePhishingReasons.length > 0 && (
+                  <div style={{ marginBottom: "24px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        marginBottom: "8px",
+                      }}
+                      onClick={() => toggleSection("phishing")}
+                    >
+                      <h3
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                          margin: 0,
+                        }}
+                      >
+                        🚨 Message Phishing Indicators
+                      </h3>
+                      {expandedSections.phishing ? (
+                        <FaChevronUp size={14} color="#94a3b8" />
+                      ) : (
+                        <FaChevronDown size={14} color="#94a3b8" />
+                      )}
+                    </div>
+                    {expandedSections.phishing && (
+                      <div
+                        style={{
+                          padding: "16px",
+                          background: "#fee2e2",
+                          borderRadius: "12px",
+                          border: "1px solid #fca5a5",
+                        }}
+                      >
+                        <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                          {selectedScan.messagePhishingReasons.map(
+                            (reason, i) => (
+                              <li
+                                key={i}
+                                style={{ marginBottom: "4px", color: "#dc2626" }}
+                              >
+                                {reason}
+                              </li>
+                            ),
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              {/* ============================================================ */}
+              {/* MESSAGE LEGITIMATE REASONS */}
+              {/* ============================================================ */}
+              {selectedScan.isMessageScan &&
+                selectedScan.messageLegitimateReasons &&
+                selectedScan.messageLegitimateReasons.length > 0 && (
+                  <div style={{ marginBottom: "24px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        marginBottom: "8px",
+                      }}
+                      onClick={() => toggleSection("legitimate")}
+                    >
+                      <h3
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                          margin: 0,
+                        }}
+                      >
+                        ✅ Message Legitimate Indicators
+                      </h3>
+                      {expandedSections.legitimate ? (
+                        <FaChevronUp size={14} color="#94a3b8" />
+                      ) : (
+                        <FaChevronDown size={14} color="#94a3b8" />
+                      )}
+                    </div>
+                    {expandedSections.legitimate && (
+                      <div
+                        style={{
+                          padding: "16px",
+                          background: "#d1fae5",
+                          borderRadius: "12px",
+                          border: "1px solid #86efac",
+                        }}
+                      >
+                        <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                          {selectedScan.messageLegitimateReasons.map(
+                            (reason, i) => (
+                              <li
+                                key={i}
+                                style={{ marginBottom: "4px", color: "#065f46" }}
+                              >
+                                {reason}
+                              </li>
+                            ),
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              {/* ============================================================ */}
+              {/* URL PHISHING REASONS (for URL scans) */}
+              {/* ============================================================ */}
+              {!selectedScan.isMessageScan &&
+                selectedScan.phishingReasons &&
                 selectedScan.phishingReasons.length > 0 && (
                   <div style={{ marginBottom: "24px" }}>
-                    <h3
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "600",
-                        color: "#64748b",
-                        marginBottom: "8px",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      🚨 Phishing Indicators
-                    </h3>
                     <div
                       style={{
-                        padding: "16px",
-                        background: "#fee2e2",
-                        borderRadius: "12px",
-                        color: "#dc2626",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        marginBottom: "8px",
                       }}
+                      onClick={() => toggleSection("urlPhishing")}
                     >
-                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                        {Array.isArray(selectedScan.phishingReasons)
-                          ? selectedScan.phishingReasons.map((reason, i) => (
-                              <li key={i} style={{ marginBottom: "4px" }}>
-                                {reason}
-                              </li>
-                            ))
-                          : selectedScan.phishingReasons}
-                      </ul>
+                      <h3
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                          margin: 0,
+                        }}
+                      >
+                        🚨 URL Phishing Indicators
+                      </h3>
+                      {expandedSections.urlPhishing ? (
+                        <FaChevronUp size={14} color="#94a3b8" />
+                      ) : (
+                        <FaChevronDown size={14} color="#94a3b8" />
+                      )}
                     </div>
+                    {expandedSections.urlPhishing && (
+                      <div
+                        style={{
+                          padding: "16px",
+                          background: "#fee2e2",
+                          borderRadius: "12px",
+                          border: "1px solid #fca5a5",
+                        }}
+                      >
+                        <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                          {selectedScan.phishingReasons.map((reason, i) => (
+                            <li
+                              key={i}
+                              style={{ marginBottom: "4px", color: "#dc2626" }}
+                            >
+                              {reason}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
-              {/* Legitimate Reasons */}
-              {selectedScan.legitimateReasons &&
+              {/* ============================================================ */}
+              {/* URL LEGITIMATE REASONS (for URL scans) */}
+              {/* ============================================================ */}
+              {!selectedScan.isMessageScan &&
+                selectedScan.legitimateReasons &&
                 selectedScan.legitimateReasons.length > 0 && (
                   <div style={{ marginBottom: "24px" }}>
-                    <h3
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "600",
-                        color: "#64748b",
-                        marginBottom: "8px",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      ✅ Legitimate Indicators
-                    </h3>
                     <div
                       style={{
-                        padding: "16px",
-                        background: "#d1fae5",
-                        borderRadius: "12px",
-                        color: "#065f46",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        marginBottom: "8px",
                       }}
+                      onClick={() => toggleSection("urlLegitimate")}
                     >
-                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
-                        {Array.isArray(selectedScan.legitimateReasons)
-                          ? selectedScan.legitimateReasons.map((reason, i) => (
-                              <li key={i} style={{ marginBottom: "4px" }}>
-                                {reason}
-                              </li>
-                            ))
-                          : selectedScan.legitimateReasons}
-                      </ul>
+                      <h3
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                          margin: 0,
+                        }}
+                      >
+                        ✅ URL Legitimate Indicators
+                      </h3>
+                      {expandedSections.urlLegitimate ? (
+                        <FaChevronUp size={14} color="#94a3b8" />
+                      ) : (
+                        <FaChevronDown size={14} color="#94a3b8" />
+                      )}
                     </div>
+                    {expandedSections.urlLegitimate && (
+                      <div
+                        style={{
+                          padding: "16px",
+                          background: "#d1fae5",
+                          borderRadius: "12px",
+                          border: "1px solid #86efac",
+                        }}
+                      >
+                        <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                          {selectedScan.legitimateReasons.map((reason, i) => (
+                            <li
+                              key={i}
+                              style={{ marginBottom: "4px", color: "#065f46" }}
+                            >
+                              {reason}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
-              {/* Conclusion */}
-              <div style={{ marginBottom: "24px" }}>
-                <h3
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: "#64748b",
-                    marginBottom: "8px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Conclusion
-                </h3>
-                <div
-                  style={{
-                    padding: "16px",
-                    background: "#f8fafc",
-                    borderRadius: "12px",
-                    color: "#475569",
-                    lineHeight: "1.7",
-                  }}
-                >
-                  {selectedScan.conclusion}
-                </div>
-              </div>
+              {/* ============================================================ */}
+              {/* URLS FOUND IN MESSAGE */}
+              {/* ============================================================ */}
+              {selectedScan.isMessageScan &&
+                selectedScan.urlsFound &&
+                selectedScan.urlsFound.length > 0 && (
+                  <div style={{ marginBottom: "24px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        marginBottom: "8px",
+                      }}
+                      onClick={() => toggleSection("urls")}
+                    >
+                      <h3
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          color: "#64748b",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                          margin: 0,
+                        }}
+                      >
+                        🔗 URLs Found in Message
+                      </h3>
+                      {expandedSections.urls ? (
+                        <FaChevronUp size={14} color="#94a3b8" />
+                      ) : (
+                        <FaChevronDown size={14} color="#94a3b8" />
+                      )}
+                    </div>
+                    {expandedSections.urls && (
+                      <div
+                        style={{
+                          padding: "16px",
+                          background: "#fef3c7",
+                          borderRadius: "12px",
+                          border: "1px solid #fcd34d",
+                        }}
+                      >
+                        {selectedScan.urlsFound.map((url, index) => {
+                          const urlResult = selectedScan.urlResults?.[index];
+                          return (
+                            <div
+                              key={index}
+                              style={{
+                                marginBottom: "8px",
+                                padding: "12px",
+                                background: "white",
+                                borderRadius: "8px",
+                                border: "1px solid #e2e8f0",
+                              }}
+                            >
+                              <p
+                                style={{
+                                  fontWeight: "600",
+                                  color: "#1e293b",
+                                  wordBreak: "break-all",
+                                  margin: 0,
+                                  marginBottom: "4px",
+                                }}
+                              >
+                                {url}
+                              </p>
+                              {urlResult && (
+                                <div>
+                                  <div style={{ marginTop: "4px" }}>
+                                    <span
+                                      style={{
+                                        padding: "2px 10px",
+                                        borderRadius: "12px",
+                                        fontSize: "11px",
+                                        fontWeight: "600",
+                                        background:
+                                          urlResult.prediction === "LEGITIMATE"
+                                            ? "#d1fae5"
+                                            : "#fee2e2",
+                                        color:
+                                          urlResult.prediction === "LEGITIMATE"
+                                            ? "#065f46"
+                                            : "#dc2626",
+                                      }}
+                                    >
+                                      Prediction:{" "}
+                                      {urlResult.prediction || "UNKNOWN"}
+                                    </span>
+                                  </div>
+                                  {urlResult.legitimateReasons &&
+                                    urlResult.legitimateReasons.length > 0 && (
+                                      <div
+                                        style={{
+                                          marginTop: "6px",
+                                          fontSize: "12px",
+                                          color: "#065f46",
+                                        }}
+                                      >
+                                        ✅ Legitimate:{" "}
+                                        {urlResult.legitimateReasons[0]}
+                                        {urlResult.legitimateReasons.length >
+                                          1 && (
+                                          <span
+                                            style={{
+                                              color: "#94a3b8",
+                                              marginLeft: "4px",
+                                            }}
+                                          >
+                                            +{urlResult.legitimateReasons.length - 1}{" "}
+                                            more
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  {urlResult.phishingReasons &&
+                                    urlResult.phishingReasons.length > 0 && (
+                                      <div
+                                        style={{
+                                          marginTop: "4px",
+                                          fontSize: "12px",
+                                          color: "#dc2626",
+                                        }}
+                                      >
+                                        🚨 Phishing:{" "}
+                                        {urlResult.phishingReasons[0]}
+                                        {urlResult.phishingReasons.length > 1 && (
+                                          <span
+                                            style={{
+                                              color: "#94a3b8",
+                                              marginLeft: "4px",
+                                            }}
+                                          >
+                                            +{urlResult.phishingReasons.length - 1}{" "}
+                                            more
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  {urlResult.conclusion && (
+                                    <div
+                                      style={{
+                                        marginTop: "6px",
+                                        padding: "8px",
+                                        background: "#f8fafc",
+                                        borderRadius: "6px",
+                                        fontSize: "12px",
+                                        color: "#475569",
+                                        lineHeight: "1.5",
+                                      }}
+                                    >
+                                      <strong>Conclusion:</strong>{" "}
+                                      {urlResult.conclusion}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {/* Timestamp */}
+              {/* ============================================================ */}
+              {/* CONCLUSION */}
+              {/* ============================================================ */}
+              {selectedScan.conclusion && (
+                <div style={{ marginBottom: "24px" }}>
+                  <h3
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      color: "#64748b",
+                      marginBottom: "8px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}
+                  >
+                    Conclusion
+                  </h3>
+                  <div
+                    style={{
+                      padding: "16px",
+                      background: "#f8fafc",
+                      borderRadius: "12px",
+                      color: "#475569",
+                      lineHeight: "1.7",
+                    }}
+                  >
+                    {selectedScan.conclusion}
+                  </div>
+                </div>
+              )}
+
+              {/* ============================================================ */}
+              {/* SCANNED AT */}
+              {/* ============================================================ */}
               <div style={{ marginBottom: "24px" }}>
                 <h3
                   style={{
@@ -1505,6 +1983,7 @@ const History = () => {
                     color: "#64748b",
                     marginBottom: "8px",
                     textTransform: "uppercase",
+                    letterSpacing: "0.5px",
                   }}
                 >
                   Scanned At
@@ -1520,12 +1999,13 @@ const History = () => {
                     gap: "8px",
                   }}
                 >
-                  <FaCalendar />
-                  {formatDate(selectedScan.scannedAt)}
+                  <FaCalendar /> {formatDate(selectedScan.scannedAt)}
                 </div>
               </div>
 
-              {/* Download Button */}
+              {/* ============================================================ */}
+              {/* DOWNLOAD BUTTON */}
+              {/* ============================================================ */}
               <div>
                 <button
                   onClick={() => handleDownloadReport(selectedScan.reference)}
@@ -1571,7 +2051,6 @@ const History = () => {
         </div>
       )}
 
-      {/* Auth Modal */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
