@@ -1,7 +1,7 @@
 // services/api.js
 import axios from "axios";
 
-const API_BASE_URL = "https://mud-cable-passerby.ngrok-free.dev";
+const API_BASE_URL = "https://secureshield-backend-1.onrender.com";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
