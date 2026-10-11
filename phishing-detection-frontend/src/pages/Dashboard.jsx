@@ -1,4 +1,8 @@
-// pages/Dashboard.jsx
+﻿// pages/Dashboard.jsx
+import { motion, AnimatePresence } from 'framer-motion';
+import GlassCard from '../components/ui/GlassCard';
+import FloatingParticles from '../components/ui/FloatingParticles';
+import PageTransition from '../components/ui/PageTransition';
 import React, { useState, useEffect } from "react";
 import { getScanHistory } from "../services/api";
 import { useNavigate } from "react-router-dom";
@@ -590,8 +594,8 @@ const Dashboard = () => {
             </h1>
             <p className="welcome-subtitle">
               {isAuthenticated
-                ? "Your AI-Powered Security Guardian • Real-time Protection Against Cyber Threats"
-                : "Start scanning URLs and messages instantly • No account required"}
+                ? "Your AI-Powered Security Guardian â€¢ Real-time Protection Against Cyber Threats"
+                : "Start scanning URLs and messages instantly â€¢ No account required"}
             </p>
           </div>
           <button
@@ -627,7 +631,7 @@ const Dashboard = () => {
               display: "inline-block",
             }}
           >
-            👋 Guest mode • Sign up to save your scan history
+            ðŸ‘‹ Guest mode â€¢ Sign up to save your scan history
           </p>
         )}
       </div>
@@ -691,7 +695,7 @@ const Dashboard = () => {
                 letterSpacing: "0.5px",
               }}
             >
-              🛡️ AI-POWERED THREAT DETECTION
+              ðŸ›¡ï¸ AI-POWERED THREAT DETECTION
             </span>
             <span
               style={{
@@ -1358,3 +1362,5 @@ const truncateText = (text, maxLength = 100) => {
 };
 
 export default Dashboard;
+
+

@@ -25,22 +25,17 @@ const AppContent = () => {
   return (
     <div
       style={{
-        background: theme.background,
-        color: theme.text,
-        minHeight: "100vh",`r`n        position: "relative",`r`n        overflow: "hidden",
-        transition: "all 0.3s ease",
+        overflow: "hidden",
       }}
     >
       <Router>
         <div
           className="app"
           style={{
-            display: "flex",
-            flexDirection: "column",
-            minHeight: "100vh",`r`n        position: "relative",`r`n        overflow: "hidden",
+        overflow: "hidden",
           }}
         >
-          <Navbar />
+            <AnimatedBackground />
           <main style={{ flex: 1 }}>
             <ErrorBoundary>
               <Routes>
@@ -70,13 +65,8 @@ const AppContent = () => {
           <Toaster
             position="top-right"
             toastOptions={{
-              duration: 4000,
-              style: {
-                background: theme.backgroundCard,
-                color: theme.text,
-                borderRadius: "8px",
-              },
-            }}
+              duration: 4000,              style: {
+                background: theme.backgroundCard,                color: theme.text,                borderRadius: "8px",              },            }}
           />
         </div>
       </Router>
@@ -97,6 +87,40 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
