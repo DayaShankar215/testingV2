@@ -1,4 +1,4 @@
-// App.jsx
+﻿// App.jsx
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
@@ -7,7 +7,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { useTheme } from "./context/ThemeContext";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
-import ErrorBoundary from "./components/common/ErrorBoundary";
+import ErrorBoundary from "./components/common/ErrorBoundary";`nimport AnimatedBackground from "./components/common/AnimatedBackground";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import URLScanner from "./pages/URLScanner";
