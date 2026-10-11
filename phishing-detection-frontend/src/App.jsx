@@ -27,7 +27,7 @@ const AppContent = () => {
       style={{
         background: theme.background,
         color: theme.text,
-        minHeight: "100vh",
+        minHeight: "100vh",`r`n        position: "relative",`r`n        overflow: "hidden",
         transition: "all 0.3s ease",
       }}
     >
@@ -37,7 +37,7 @@ const AppContent = () => {
           style={{
             display: "flex",
             flexDirection: "column",
-            minHeight: "100vh",
+            minHeight: "100vh",`r`n        position: "relative",`r`n        overflow: "hidden",
           }}
         >
           <Navbar />
@@ -97,5 +97,8 @@ function App() {
 }
 
 export default App;
+
+
+
 
 
