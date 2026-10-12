@@ -290,6 +290,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .text-center { text-align: center; }
+.text-right { text-align: right; }
 .text-muted { color: var(--text-3); }
 .text-secondary { color: var(--text-2); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
