@@ -1,31 +1,22 @@
 import React from "react";
 import { getRiskLevel } from "../../utils/formatters";
 
-const RiskBadge = ({ score, size = "medium" }) => {
-  const { label, color, icon } = getRiskLevel(score);
+const toneFor = (score) => {
+  const value = Number(score) || 0;
+  if (value > 70) return "danger";
+  if (value > 30) return "warning";
+  return "success";
+};
 
-  const sizeStyles = {
-    small: { padding: "4px 8px", fontSize: "12px" },
-    medium: { padding: "6px 12px", fontSize: "14px" },
-    large: { padding: "8px 16px", fontSize: "16px" },
-  };
+const RiskBadge = ({ score, size = "medium", showScore = true }) => {
+  const { label, icon } = getRiskLevel(score);
+  const tone = toneFor(score);
 
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        backgroundColor: color + "20",
-        color: color,
-        borderRadius: "20px",
-        fontWeight: "600",
-        ...sizeStyles[size],
-      }}
-    >
-      <span>{icon}</span>
+    <span className={`badge badge-${tone} badge-${size}`}>
+      <span aria-hidden="true">{icon}</span>
       <span>{label}</span>
-      <span style={{ fontWeight: "bold" }}>{Math.round(score)}%</span>
+      {showScore && <strong>{Math.round(Number(score) || 0)}%</strong>}
     </span>
   );
 };

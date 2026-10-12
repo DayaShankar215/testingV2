@@ -3,24 +3,15 @@ import { ThreeDots } from "react-loader-spinner";
 
 const LoadingSpinner = ({ text = "Loading..." }) => {
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "40px",
-      }}
-    >
+    <div className="loading" role="status" aria-live="polite">
       <ThreeDots
-        height="80"
-        width="80"
-        color="#667eea"
+        height="64"
+        width="64"
+        color="var(--brand)"
         ariaLabel="loading"
         visible={true}
       />
-
-      {text && <p style={{ marginTop: "20px", color: "#666" }}>{text}</p>}
+      {text && <p className="loading-text">{text}</p>}
     </div>
   );
 };
