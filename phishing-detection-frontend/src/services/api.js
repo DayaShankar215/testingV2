@@ -1,7 +1,8 @@
 // services/api.js
 import axios from "axios";
 
-const API_BASE_URL = "https://mud-cable-passerby.ngrok-free.dev" || "http://localhost:5173";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5173";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -20,7 +21,6 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`[API] ${config.method.toUpperCase()} ${config.url}`, config);
     return config;
   },
   (error) => {
@@ -31,11 +31,9 @@ api.interceptors.request.use(
 // --- Response Interceptor ---
 api.interceptors.response.use(
   (response) => {
-    console.log(`[API Response] ${response.status}`, response);
     return response;
   },
   (error) => {
-    console.error("[API Error]", error);
     if (error.code === "ERR_NETWORK") {
       throw { 
         message: "Cannot connect to server. Please check your connection.",
@@ -169,18 +167,14 @@ export const deleteScanByReference = async (reference) => {
     if (!ref) {
       throw new Error("Invalid reference ID");
     }
-    
-    console.log(`[DELETE] Attempting to delete scan: ${ref}`);
-    
+
     const response = await api.delete(`/scans/${ref}`, {
       headers: { 
         "Accept": "*/*",
         "Content-Type": "*/*",
       },
     });
-    
-    console.log(`[DELETE] Response status: ${response.status}`, response);
-    
+
     if (response.status === 204) {
       return { message: "Scan deleted successfully", success: true };
     }
@@ -191,8 +185,6 @@ export const deleteScanByReference = async (reference) => {
     
     return { message: "Scan deleted successfully", success: true };
   } catch (error) {
-    console.error("[DELETE] Error:", error);
-    
     if (error.code === "ERR_NETWORK") {
       throw { 
         message: "Cannot connect to server. Please check your connection.",
@@ -201,9 +193,6 @@ export const deleteScanByReference = async (reference) => {
     }
     
     if (error.response) {
-      console.error(`[DELETE] Response status: ${error.response.status}`);
-      console.error(`[DELETE] Response data:`, error.response.data);
-      
       if (error.response.status === 204) {
         return { message: "Scan deleted successfully", success: true };
       }
@@ -275,12 +264,9 @@ export const getDashboardStats = async () => {
 
 export const submitFeedbackMessage = async (message) => {
   try {
-    console.log("[Feedback] Submitting:", { message });
     const response = await api.post("/feedback", { message });
-    console.log("[Feedback] Response:", response.data);
     return response.data;
   } catch (error) {
-    console.error("[Feedback] Error:", error);
     throw error.response?.data || { message: "Failed to submit feedback" };
   }
 };
@@ -294,12 +280,9 @@ export const submitAccuracy = async (data) => {
       reference: data.reference,
       accurate: data.accurate
     };
-    console.log("[Accuracy] Submitting:", payload);
     const response = await api.post("/feedback/accuracy", payload);
-    console.log("[Accuracy] Response:", response.data);
     return response.data;
   } catch (error) {
-    console.error("[Accuracy] Error:", error);
     throw error.response?.data || { message: "Failed to submit accuracy" };
   }
 };
