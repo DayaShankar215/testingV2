@@ -28,8 +28,10 @@ import {
   FaSortNumericDown,
   FaChevronDown,
   FaChevronUp,
+  FaFileCsv,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
+import { exportScansToCsv } from "../utils/exportCsv";
 
 const History = () => {
   const [scans, setScans] = useState([]);
@@ -469,6 +471,19 @@ const History = () => {
     }));
   };
 
+  const handleExportCsv = () => {
+    if (!filteredScans || filteredScans.length === 0) {
+      toast.error("No scans to export");
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    const ok = exportScansToCsv(
+      filteredScans,
+      `secureshield-history-${stamp}.csv`,
+    );
+    if (ok) toast.success(`Exported ${filteredScans.length} scans to CSV`);
+  };
+
   if (loading) {
     return <LoadingSpinner text="Loading security history..." />;
   }
@@ -568,6 +583,16 @@ const History = () => {
                 <FaTimes />
               </span>
             )}
+          </button>
+
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleExportCsv}
+            disabled={filteredScans.length === 0}
+            title="Export filtered scans to CSV"
+          >
+            <FaFileCsv />
+            Export CSV
           </button>
 
           <div className="search-wrap">

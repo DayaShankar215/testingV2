@@ -37,6 +37,7 @@ import {
 } from "recharts";
 import toast from "react-hot-toast";
 import AuthModal from "../components/common/AuthModal";
+import AnimatedNumber from "../components/common/AnimatedNumber";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -368,7 +369,9 @@ const Dashboard = () => {
       <div className="stat-icon" style={{ background: gradient }}>
         <Icon />
       </div>
-      <div className="stat-value">{value}</div>
+      <div className="stat-value">
+        <AnimatedNumber value={value} />
+      </div>
       <div className="stat-label">{title}</div>
       {subtitle && <div className="stat-sub">{subtitle}</div>}
     </div>

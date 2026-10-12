@@ -13,10 +13,12 @@ import {
   FaSignOutAlt,
   FaUserPlus,
   FaSignInAlt,
+  FaSearch,
 } from "react-icons/fa";
 import ThemeToggle from "./ThemeToggle";
 import { useAuth } from "../../context/AuthContext";
 import AuthModal from "./AuthModal";
+import { OPEN_AUTH_EVENT, OPEN_PALETTE_EVENT } from "./CommandPalette";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: FaHome },
@@ -77,6 +79,15 @@ const Navbar = () => {
     };
   }, [drawerOpen]);
 
+  useEffect(() => {
+    const onOpenAuth = (e) => {
+      setAuthMode(e.detail?.mode || "login");
+      setShowAuthModal(true);
+    };
+    window.addEventListener(OPEN_AUTH_EVENT, onOpenAuth);
+    return () => window.removeEventListener(OPEN_AUTH_EVENT, onOpenAuth);
+  }, []);
+
   const isActive = (path) => location.pathname === path;
 
   const handleAuthClick = (mode) => {
@@ -134,6 +145,17 @@ const Navbar = () => {
           </div>
 
           <div className="nav-actions">
+            <button
+              type="button"
+              className="nav-search hide-mobile"
+              onClick={() => window.dispatchEvent(new Event(OPEN_PALETTE_EVENT))}
+              aria-label="Open command palette"
+            >
+              <FaSearch size={13} />
+              <span>Search</span>
+              <kbd className="kbd">Ctrl K</kbd>
+            </button>
+
             <span className="hide-mobile">
               <ThemeToggle />
             </span>

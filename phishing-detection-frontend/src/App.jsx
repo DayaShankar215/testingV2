@@ -10,6 +10,8 @@ import Footer from "./components/common/Footer";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import ScrollToTop from "./components/common/ScrollToTop";
+import BackToTop from "./components/common/BackToTop";
+import CommandPalette from "./components/common/CommandPalette";
 import Dashboard from "./pages/Dashboard";
 import URLScanner from "./pages/URLScanner";
 import MessageScanner from "./pages/MessageScanner";
@@ -52,6 +54,8 @@ const AppContent = () => {
           </ErrorBoundary>
         </main>
         <Footer />
+        <BackToTop />
+        <CommandPalette />
         <Toaster
           key={currentTheme}
           position="top-right"
