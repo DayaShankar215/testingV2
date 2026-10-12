@@ -342,6 +342,14 @@
 .search-wrap { position: relative; flex: 1; min-width: 220px; }
 .search-wrap .input-icon { top: 50%; transform: translateY(-50%); }
 
+.field-with-button {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+.field-with-button .input-wrap { flex: 1; }
+.field-with-button .btn { flex-shrink: 0; }
+
 /* ------------------------------------------------------------
    ALERTS
    ------------------------------------------------------------ */
