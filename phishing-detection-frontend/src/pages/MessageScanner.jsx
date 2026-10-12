@@ -1,12 +1,16 @@
 // pages/MessageScanner.jsx
 import React, { useState } from "react";
-import { scanMessage, submitFeedbackMessage, submitAccuracy, getScanByReference } from "../services/api";
+import {
+  scanMessage,
+  submitFeedbackMessage,
+  submitAccuracy,
+  getScanByReference,
+} from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
 import AuthModal from "../components/common/AuthModal";
 import {
   FaShieldAlt,
-  FaDownload,
   FaInfoCircle,
   FaEnvelope,
   FaExclamationTriangle,
@@ -37,7 +41,6 @@ const MessageScanner = () => {
   const { isAuthenticated } = useAuth();
   const { addScan } = useGuest();
 
-  // Feedback state
   const [showFeedback, setShowFeedback] = useState(false);
   const [scanId, setScanId] = useState("");
   const [feedback, setFeedback] = useState({
@@ -72,14 +75,15 @@ const MessageScanner = () => {
   };
 
   const processScanResponse = (response, scannedMessage) => {
-    const rawPrediction = response.overallPrediction || response.prediction || "UNKNOWN";
+    const rawPrediction =
+      response.overallPrediction || response.prediction || "UNKNOWN";
     const prediction = rawPrediction;
-    
+
     let riskScore = 50;
     let resultType = "unknown";
 
     const upperPrediction = prediction.toUpperCase().trim();
-    
+
     switch (upperPrediction) {
       case "PHISHING":
       case "DANGEROUS":
@@ -155,19 +159,23 @@ const MessageScanner = () => {
 
       const reference = response.reference || "";
       setScanId(reference);
-      
+
       setShowFeedback(true);
       setFeedback({
         type: "message",
         isAccurate: null,
         comments: "",
       });
-      
+
       toast.success("Message analysis completed!");
     } catch (err) {
       console.error("Scan Error:", err);
-      
-      if (err.isCorsError || err.message?.includes("CORS") || err.message?.includes("Network")) {
+
+      if (
+        err.isCorsError ||
+        err.message?.includes("CORS") ||
+        err.message?.includes("Network")
+      ) {
         setConnectionError(true);
         setError("Cannot connect to the server. Please check your connection.");
         toast.error("Connection Error");
@@ -199,28 +207,40 @@ const MessageScanner = () => {
     try {
       const scanDetails = await getScanByReference(reference);
       console.log("Scan Details for PDF:", scanDetails);
-      
+
       const pdfData = {
         reference: scanDetails.reference,
         scanType: scanDetails.scanType || "MESSAGE",
         message: result.message || scanDetails.message || "",
         prediction: scanDetails.overallPrediction || scanDetails.prediction,
-        riskScore: result.riskScore || getRiskScoreFromPrediction(scanDetails.overallPrediction || scanDetails.prediction),
+        riskScore:
+          result.riskScore ||
+          getRiskScoreFromPrediction(
+            scanDetails.overallPrediction || scanDetails.prediction,
+          ),
         conclusion: scanDetails.conclusion || "Analysis completed",
         scannedAt: scanDetails.scannedAt,
-        phishingReasons: scanDetails.messagePhishingReasons || scanDetails.phishingReasons || [],
-        legitimateReasons: scanDetails.messageLegitimateReasons || scanDetails.legitimateReasons || [],
+        phishingReasons:
+          scanDetails.messagePhishingReasons ||
+          scanDetails.phishingReasons ||
+          [],
+        legitimateReasons:
+          scanDetails.messageLegitimateReasons ||
+          scanDetails.legitimateReasons ||
+          [],
         urlsFound: scanDetails.urlsFound || [],
         urlResults: scanDetails.urlResults || [],
         messagePhishingReasons: scanDetails.messagePhishingReasons || [],
         messageLegitimateReasons: scanDetails.messageLegitimateReasons || [],
-        overallPrediction: scanDetails.overallPrediction || scanDetails.prediction,
-        messagePrediction: scanDetails.messagePrediction || scanDetails.prediction,
+        overallPrediction:
+          scanDetails.overallPrediction || scanDetails.prediction,
+        messagePrediction:
+          scanDetails.messagePrediction || scanDetails.prediction,
       };
-      
-      const { downloadPDF } = await import('../services/pdfGenerator');
-      downloadPDF(pdfData, 'message');
-      
+
+      const { downloadPDF } = await import("../services/pdfGenerator");
+      downloadPDF(pdfData, "message");
+
       toast.success("Report downloaded successfully!");
     } catch (error) {
       console.error("Download Error:", error);
@@ -237,17 +257,15 @@ const MessageScanner = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ✅ FIXED: Allow toggling accuracy selection
   const handleAccuracySelect = async (isAccurate) => {
     console.log("Scan ID:", scanId);
-    
+
     if (!scanId || scanId.trim() === "") {
       toast.error("Scan ID not found. Please try scanning again.");
       console.error("Scan ID is null or empty:", scanId);
       return;
     }
 
-    // ✅ If user clicks the same option, deselect it (toggle off)
     if (feedback.isAccurate === isAccurate) {
       setFeedback({ ...feedback, isAccurate: null });
       setAccuracySubmitted(false);
@@ -257,21 +275,21 @@ const MessageScanner = () => {
 
     setFeedback({ ...feedback, isAccurate });
     setAccuracyError(null);
-    
+
     try {
       console.log("Submitting accuracy with:", {
         reference: scanId,
-        accurate: isAccurate
+        accurate: isAccurate,
       });
-      
+
       const response = await submitAccuracy({
         reference: scanId,
-        accurate: isAccurate
+        accurate: isAccurate,
       });
-      
+
       console.log("Accuracy Response:", response);
       setAccuracySubmitted(true);
-      
+
       if (response?.reply) {
         toast.success(response.reply);
       } else {
@@ -295,24 +313,23 @@ const MessageScanner = () => {
     }
 
     setSubmitting(true);
-    
+
     try {
       const response = await submitFeedbackMessage(feedback.comments);
       console.log("Feedback Message Response:", response);
-      
+
       if (response?.reply) {
         setFeedbackReply(response.reply);
       }
-      
+
       setFeedbackSubmitted(true);
       toast.success("Thank you for your feedback! 🎉");
-      
+
       setTimeout(() => {
         setShowFeedback(false);
         setFeedbackSubmitted(false);
         setFeedbackReply("");
       }, 5000);
-
     } catch (error) {
       console.error("Feedback Submit Error:", error);
       toast.error(error.message || "Failed to submit feedback");
@@ -326,7 +343,7 @@ const MessageScanner = () => {
       return {
         label: "High Risk",
         color: "#ef4444",
-        bg: "#fee2e2",
+        bg: "var(--danger-soft)",
         border: "#fca5a5",
         icon: "🚨",
         badge: "Scam",
@@ -335,7 +352,7 @@ const MessageScanner = () => {
       return {
         label: "Medium Risk",
         color: "#f59e0b",
-        bg: "#fef3c7",
+        bg: "var(--warning-soft)",
         border: "#fcd34d",
         icon: "⚠️",
         badge: "Suspicious",
@@ -343,7 +360,7 @@ const MessageScanner = () => {
     return {
       label: "Low Risk",
       color: "#10b981",
-      bg: "#d1fae5",
+      bg: "var(--success-soft)",
       border: "#6ee7b7",
       icon: "✅",
       badge: "Safe",
@@ -353,1107 +370,422 @@ const MessageScanner = () => {
   const riskLevel = result ? getRiskLevel(result.riskScore) : null;
 
   return (
-    <div
-      style={{
-        maxWidth: "1200px",
-        margin: "0 auto",
-        padding: "40px 24px",
-        minHeight: "calc(100vh - 200px)",
-        background: "#f8fafc",
-      }}
-    >
-      {/* Hero Section */}
-      <div style={{ textAlign: "center", marginBottom: "48px" }}>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "12px",
-            background: "linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)",
-            padding: "8px 20px",
-            borderRadius: "100px",
-            marginBottom: "20px",
-          }}
-        >
-          <FaWhatsapp style={{ color: "#f5576c" }} />
-          <span style={{ fontWeight: "600", color: "#f5576c" }}>
-            SMS & Message Security
+    <div className="page">
+      <div className="container">
+        {/* Hero */}
+        <div className="text-center" style={{ marginBottom: 40 }}>
+          <span className="eyebrow">
+            <FaWhatsapp /> SMS &amp; Message Security
           </span>
-        </div>
-        <h1
-          style={{
-            fontSize: "48px",
-            fontWeight: "800",
-            background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            color: "transparent",
-            marginBottom: "16px",
-          }}
-        >
-          Scam Message Detector
-        </h1>
-        <p
-          style={{
-            fontSize: "18px",
-            color: "#64748b",
-            maxWidth: "600px",
-            margin: "0 auto",
-          }}
-        >
-          AI-powered scam detection for SMS, WhatsApp, and instant messages
-        </p>
-        {!isAuthenticated && (
-          <p
-            style={{
-              fontSize: "14px",
-              color: "#94a3b8",
-              marginTop: "8px",
-              background: "#f1f5f9",
-              padding: "6px 16px",
-              borderRadius: "100px",
-              display: "inline-block",
-            }}
+          <h1
+            className="page-title gradient-text"
+            style={{ marginTop: 18, fontSize: "clamp(2rem, 5vw, 3rem)" }}
           >
-            👋 Guest mode • Sign up to save your scan history
+            Scam Message Detector
+          </h1>
+          <p
+            className="text-secondary"
+            style={{ maxWidth: 620, margin: "0 auto", fontSize: "1.05rem" }}
+          >
+            AI-powered scam detection for SMS, WhatsApp, and instant messages.
           </p>
-        )}
-      </div>
+          {!isAuthenticated && (
+            <span className="badge badge-neutral" style={{ marginTop: 14 }}>
+              👋 Guest mode • Sign up to save your scan history
+            </span>
+          )}
+        </div>
 
-      {/* Input Card */}
-      <div
-        style={{
-          background: "white",
-          borderRadius: "32px",
-          padding: "32px",
-          boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
-          marginBottom: "32px",
-        }}
-      >
-        <form onSubmit={handleScan}>
-          <div style={{ marginBottom: "24px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "12px",
-                fontWeight: "600",
-                color: "#1e293b",
-                fontSize: "14px",
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
-              }}
-            >
+        {/* Input Card */}
+        <div className="card card-pad" style={{ marginBottom: 28 }}>
+          <form onSubmit={handleScan}>
+            <label className="label" htmlFor="message-input">
               Paste Suspicious Message
             </label>
-            <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-              <div style={{ flex: 1, position: "relative" }}>
-                <FaEnvelope
-                  style={{
-                    position: "absolute",
-                    left: "16px",
-                    top: "20px",
-                    color: "#94a3b8",
-                  }}
-                />
+            <div className="field-with-button">
+              <div className="input-wrap" style={{ flex: 1 }}>
+                <FaEnvelope className="input-icon top" />
                 <textarea
+                  id="message-input"
+                  className="textarea"
                   rows="6"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Paste the suspicious message here..."
-                  style={{
-                    width: "100%",
-                    padding: "16px 16px 16px 48px",
-                    border: "2px solid #e2e8f0",
-                    borderRadius: "16px",
-                    fontSize: "16px",
-                    fontFamily: "inherit",
-                    resize: "vertical",
-                    transition: "all 0.3s ease",
-                    outline: "none",
-                    lineHeight: "1.6",
-                    minHeight: "160px",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#f5576c")}
-                  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
                   disabled={loading}
                 />
                 {message && (
                   <button
                     type="button"
+                    className="input-affix"
+                    style={{ bottom: 12, top: "auto", transform: "none" }}
                     onClick={handleCopyMessage}
-                    style={{
-                      position: "absolute",
-                      bottom: "16px",
-                      right: "16px",
-                      background: "#f8fafc",
-                      border: "none",
-                      padding: "8px",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      color: copied ? "#10b981" : "#94a3b8",
-                    }}
+                    aria-label="Copy message"
                   >
-                    <FaCopy />
+                    <FaCopy style={{ color: copied ? "#10b981" : undefined }} />
                   </button>
                 )}
               </div>
               <button
                 type="submit"
+                className="btn btn-primary btn-lg"
                 disabled={loading}
-                style={{
-                  background: loading
-                    ? "#94a3b8"
-                    : "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                  color: "white",
-                  padding: "16px 32px",
-                  border: "none",
-                  borderRadius: "16px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  transition: "all 0.3s ease",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  whiteSpace: "nowrap",
-                  height: "56px",
-                }}
               >
                 {loading ? (
                   <>
-                    <FaSpinner className="spinning" />
-                    <span>Analyzing...</span>
+                    <FaSpinner className="spinning" /> Analyzing...
                   </>
                 ) : (
                   <>
-                    <FaShieldAlt />
-                    <span>Analyze</span>
+                    <FaShieldAlt /> Analyze
                   </>
                 )}
               </button>
             </div>
             <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginTop: "12px",
-                fontSize: "12px",
-                color: "#94a3b8",
-              }}
+              className="flex justify-between text-muted"
+              style={{ marginTop: 8, fontSize: 12 }}
             >
               <span>Characters: {message.length}</span>
               <span>Minimum 10 characters recommended</span>
             </div>
-          </div>
-        </form>
-      </div>
+          </form>
+        </div>
 
-      {/* Error Display */}
-      {connectionError && (
-        <div
-          style={{
-            background: "#fef2f2",
-            border: "2px solid #fca5a5",
-            borderRadius: "16px",
-            padding: "24px",
-            marginBottom: "24px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "16px" }}>
-            <FaExclamationCircle style={{ color: "#dc2626", fontSize: "32px", flexShrink: 0, marginTop: "4px" }} />
+        {/* Errors */}
+        {connectionError && (
+          <div className="alert alert-danger">
+            <FaExclamationCircle size={26} />
             <div style={{ flex: 1 }}>
-              <h3 style={{ color: "#dc2626", margin: "0 0 8px", fontSize: "18px" }}>
-                ⚠️ Connection Error
-              </h3>
-              <p style={{ color: "#475569", margin: "0 0 12px", lineHeight: "1.6" }}>
-                {error || "Cannot connect to the server. Please check your connection."}
+              <div className="alert-title">⚠️ Connection Error</div>
+              <p>
+                {error ||
+                  "Cannot connect to the server. Please check your connection."}
               </p>
               <button
+                className="btn btn-primary btn-sm"
+                style={{ marginTop: 12 }}
                 onClick={() => {
                   setConnectionError(false);
                   setError(null);
                 }}
-                style={{
-                  padding: "10px 24px",
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
               >
-                <FaWifi />
-                Try Again
+                <FaWifi /> Try Again
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {error && !connectionError && (
-        <div
-          style={{
-            background: "#fee",
-            borderLeft: "4px solid #ef4444",
-            padding: "16px 20px",
-            borderRadius: "12px",
-            marginBottom: "24px",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-          }}
-        >
-          <FaExclamationTriangle style={{ color: "#ef4444", fontSize: "20px" }} />
-          <p style={{ color: "#dc2626", margin: 0 }}>{error}</p>
-        </div>
-      )}
+        {error && !connectionError && (
+          <div className="alert alert-danger">
+            <FaExclamationTriangle size={20} />
+            <p style={{ color: "var(--danger-text)", margin: 0 }}>{error}</p>
+          </div>
+        )}
 
-      {/* Results Section */}
-      {result && (
-        <div style={{ animation: "slideUp 0.5s ease-out" }}>
-          {/* Risk Score Card */}
+        {/* Results */}
+        {result && (
           <div
-            style={{
-              background: "white",
-              borderRadius: "24px",
-              padding: "32px",
-              marginBottom: "32px",
-              boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
-              border: `1px solid ${riskLevel.border}`,
-              position: "relative",
-              overflow: "hidden",
-            }}
+            className="result-stack"
+            style={{ "--risk-color": riskLevel.color }}
           >
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                width: "300px",
-                height: "300px",
-                borderRadius: "50%",
-                background: `radial-gradient(circle, ${riskLevel.color}15 0%, transparent 70%)`,
-                transform: "translate(100px, -100px)",
-              }}
-            />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-                gap: "24px",
-                marginBottom: "32px",
-              }}
-            >
-              <div
-                style={{
-                  background: "white",
-                  borderRadius: "20px",
-                  padding: "28px",
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
-                  border: "1px solid #f1f5f9",
-                }}
-              >
+            <div className="result-head">
+              <div className="risk-gauge">
                 <div
+                  className="risk-score-ring"
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    marginBottom: "20px",
+                    "--pct": result.riskScore,
+                    "--risk-color": riskLevel.color,
                   }}
                 >
-                  <div
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      background:
-                        "linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)",
-                      borderRadius: "14px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "20px",
-                    }}
-                  >
-                    🏷️
-                  </div>
-                  <div>
-                    <h3
-                      style={{
-                        fontSize: "16px",
-                        fontWeight: "700",
-                        color: "#1e293b",
-                        margin: 0,
-                      }}
-                    >
-                      Classification
-                    </h3>
-                    <p
-                      style={{
-                        fontSize: "13px",
-                        color: "#94a3b8",
-                        margin: 0,
-                      }}
-                    >
-                      AI-Powered Prediction
-                    </p>
-                  </div>
+                  <span>{result.riskScore}</span>
                 </div>
-                <div
-                  style={{
-                    padding: "16px",
-                    background: "#f8fafc",
-                    borderRadius: "12px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "700",
-                      color: riskLevel.color,
-                      lineHeight: "1.6",
-                      margin: 0,
-                    }}
-                  >
-                    {result.prediction || result.classification}
-                  </p>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {result.reference && (
+                <div className="risk-meta">
+                  <span className="risk-label">
+                    {riskLevel.icon} {riskLevel.label}
+                  </span>
+                  <h3>{result.prediction || result.classification}</h3>
+                  <div className="risk-bar">
                     <div
+                      className="risk-bar-fill"
                       style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "6px 14px",
-                        background: "#f1f5f9",
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        fontWeight: "500",
-                        color: "#64748b",
+                        width: `${result.riskScore}%`,
+                        background: riskLevel.color,
                       }}
-                    >
-                      <FaInfoCircle size={14} />
-                      Ref: {result.reference}
+                    />
+                  </div>
+                  <div className="risk-scale">
+                    <span>0</span>
+                    <span>50</span>
+                    <span>100</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="result-grid">
+                <div className="result-tile">
+                  <div className="result-tile-head">
+                    <div className="result-tile-icon">🏷️</div>
+                    <div>
+                      <h3>Classification</h3>
+                      <p>AI-Powered Prediction</p>
                     </div>
+                  </div>
+                  <div className="result-box" style={{ marginBottom: 14 }}>
+                    <span
+                      className="result-value"
+                      style={{ color: riskLevel.color }}
+                    >
+                      {result.prediction || result.classification}
+                    </span>
+                  </div>
+                  {result.reference && (
+                    <span className="badge badge-neutral">
+                      <FaInfoCircle size={13} /> Ref: {result.reference}
+                    </span>
                   )}
                 </div>
-              </div>
 
-              <div
-                style={{
-                  background: "white",
-                  borderRadius: "20px",
-                  padding: "28px",
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
-                  border: "1px solid #f1f5f9",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    marginBottom: "20px",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      background:
-                        "linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)",
-                      borderRadius: "14px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "20px",
-                    }}
-                  >
-                    📋
+                <div className="result-tile">
+                  <div className="result-tile-head">
+                    <div className="result-tile-icon">📋</div>
+                    <div>
+                      <h3>Analysis Details</h3>
+                      <p>Key Scam Indicators</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3
-                      style={{
-                        fontSize: "16px",
-                        fontWeight: "700",
-                        color: "#1e293b",
-                        margin: 0,
-                      }}
-                    >
-                      Analysis Details
-                    </h3>
-                    <p
-                      style={{
-                        fontSize: "13px",
-                        color: "#94a3b8",
-                        margin: 0,
-                      }}
-                    >
-                      Key Scam Indicators
-                    </p>
-                  </div>
-                </div>
-                <div
-                  style={{
-                    padding: "16px",
-                    background: "#f8fafc",
-                    borderRadius: "12px",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "14px",
-                      color: "#475569",
-                      lineHeight: "1.7",
-                      margin: 0,
-                    }}
-                  >
-                    {result.explanation}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "20px",
-                position: "relative",
-                zIndex: 1,
-                marginTop: "16px",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    marginBottom: "8px",
-                  }}
-                >
-                  {/* <span style={{ fontSize: "28px" }}>{riskLevel.icon}</span>
-                  <span
-                    style={{
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      color: riskLevel.color,
-                      background: riskLevel.bg,
-                      padding: "4px 16px",
-                      borderRadius: "100px",
-                    }}
-                  >
-                    {riskLevel.badge}
-                  </span> */}
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    gap: "16px",
-                  }}
-                >
-                  {/* <span
-                    style={{
-                      fontSize: "56px",
-                      fontWeight: "800",
-                      color: riskLevel.color,
-                      lineHeight: 1,
-                    }}
-                  >
-                    {Math.round(result.riskScore)}%
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: "600",
-                      color: riskLevel.color,
-                    }}
-                  >
-                    {riskLevel.label}
-                  </span> */}
+                  <div className="result-box">{result.explanation}</div>
                 </div>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap", width: "100%" }}>
+              <div className="flex justify-center">
                 <button
+                  className="btn btn-lg"
                   onClick={handleDownloadReport}
                   disabled={downloading}
                   style={{
                     background: riskLevel.color,
-                    color: "white",
-                    padding: "14px 28px",
-                    border: "none",
-                    borderRadius: "14px",
-                    cursor: downloading ? "not-allowed" : "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    fontWeight: "600",
-                    fontSize: "15px",
-                    transition: "all 0.3s ease",
-                    opacity: downloading ? 0.6 : 1,
-                    boxShadow: `0 4px 16px ${riskLevel.color}40`,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!downloading) {
-                      e.currentTarget.style.transform = "scale(1.02)";
-                      e.currentTarget.style.boxShadow = `0 6px 24px ${riskLevel.color}50`;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!downloading) {
-                      e.currentTarget.style.transform = "scale(1)";
-                      e.currentTarget.style.boxShadow = `0 4px 16px ${riskLevel.color}40`;
-                    }
+                    color: "#fff",
+                    boxShadow: `0 8px 24px ${riskLevel.color}40`,
                   }}
                 >
                   {downloading ? (
                     <>
-                      <FaSpinner className="spinning" />
-                      <span>Downloading...</span>
+                      <FaSpinner className="spinning" /> Downloading...
                     </>
                   ) : !isAuthenticated ? (
                     <>
-                      <FaUserPlus />
-                      <span>Sign in to Download</span>
+                      <FaUserPlus /> Sign in to Download
                     </>
                   ) : (
                     <>
-                      <FaFilePdf />
-                      <span>Download Report</span>
+                      <FaFilePdf /> Download Report
                     </>
                   )}
                 </button>
               </div>
             </div>
 
-            <div style={{ marginTop: "20px", position: "relative", zIndex: 1 }}>
-              <div
-                style={{
-                  width: "100%",
-                  height: "8px",
-                  // background: "#f1f5f9",
-                  borderRadius: "4px",
-                  overflow: "hidden",
-                }}
-              >
-                {/* <div
-                  style={{
-                    width: `${result.riskScore}%`,
-                    height: "100%",
-                    background: `linear-gradient(90deg, ${riskLevel.color}80, ${riskLevel.color})`,
-                    borderRadius: "4px",
-                    transition: "width 1s ease",
-                  }}
-                /> */}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginTop: "8px",
-                  fontSize: "12px",
-                  color: "#94a3b8",
-                }}
-              >
-                {/* <span>Low Risk (0%)</span>
-                <span>Medium (50%)</span>
-                <span>High Risk (100%)</span> */}
-              </div>
-            </div>
-
-            {/* <p
-              style={{
-                marginTop: "16px",
-                fontSize: "15px",
-                color: riskLevel.color,
-                fontWeight: "500",
-                position: "relative",
-                zIndex: 1,
-              }}
-            >
-              {result.riskScore > 70
-                ? "🚨 HIGH RISK: This is likely a scam! Do not respond or click any links."
-                : result.riskScore > 30
-                ? "⚠️ MEDIUM RISK: This message shows scam indicators. Exercise caution."
-                : "✅ LOW RISK: This message appears legitimate."}
-            </p> */}
-          </div>
-
-          {/* Message Phishing Reasons */}
-          {result._raw?.messagePhishingReasons && result._raw.messagePhishingReasons.length > 0 && (
-            <div
-              style={{
-                background: "#fee2e2",
-                borderRadius: "16px",
-                padding: "20px",
-                marginBottom: "16px",
-                border: "1px solid #fca5a5",
-              }}
-            >
-              <h4 style={{ color: "#dc2626", marginBottom: "12px", fontSize: "16px", fontWeight: "700" }}>
-                🚨 Message Phishing Indicators
-              </h4>
-              <ul style={{ margin: 0, paddingLeft: "20px", color: "#475569" }}>
-                {result._raw.messagePhishingReasons.map((reason, index) => (
-                  <li key={index} style={{ marginBottom: "6px" }}>{reason}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* URLs Found */}
-          {result._raw?.urlsFound && result._raw.urlsFound.length > 0 && (
-            <div
-              style={{
-                background: "#fef3c7",
-                borderRadius: "16px",
-                padding: "20px",
-                marginBottom: "16px",
-                border: "1px solid #fcd34d",
-              }}
-            >
-              <h4 style={{ color: "#d97706", marginBottom: "12px", fontSize: "16px", fontWeight: "700" }}>
-                <FaLink style={{ marginRight: "8px" }} />
-                URLs Found in Message
-              </h4>
-              {result._raw.urlsFound.map((url, index) => {
-                const urlResult = result._raw.urlResults?.[index];
-                return (
-                  <div
-                    key={index}
-                    style={{
-                      background: "white",
-                      borderRadius: "12px",
-                      padding: "16px",
-                      marginBottom: "8px",
-                      border: "1px solid #e2e8f0",
-                    }}
-                  >
-                    <p style={{ fontWeight: "600", color: "#1e293b", wordBreak: "break-all" }}>
-                      {url}
-                    </p>
-                    {urlResult && (
-                      <div style={{ marginTop: "8px" }}>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "2px 12px",
-                            borderRadius: "12px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            background: urlResult.prediction === "LEGITIMATE" ? "#d1fae5" : "#fee2e2",
-                            color: urlResult.prediction === "LEGITIMATE" ? "#065f46" : "#dc2626",
-                          }}
-                        >
-                          {urlResult.prediction || "UNKNOWN"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Recommendation */}
-          <div
-            style={{
-              background: `linear-gradient(135deg, ${riskLevel.bg} 0%, white 100%)`,
-              borderRadius: "20px",
-              padding: "28px",
-              marginBottom: "32px",
-              border: `2px solid ${riskLevel.border}`,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "14px",
-                marginBottom: "16px",
-              }}
-            >
-              <div
-                style={{
-                  width: "44px",
-                  height: "44px",
-                  background: riskLevel.bg,
-                  borderRadius: "12px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "22px",
-                }}
-              >
-                🛡️
-              </div>
-              <div>
-                <h3
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: "700",
-                    color: riskLevel.color,
-                    margin: 0,
-                  }}
-                >
-                  Security Recommendation
-                </h3>
-                <p
-                  style={{
-                    fontSize: "13px",
-                    color: "#94a3b8",
-                    margin: 0,
-                  }}
-                >
-                  What you should do next
-                </p>
-              </div>
-            </div>
-            <p
-              style={{
-                fontSize: "15px",
-                color: "#475569",
-                lineHeight: "1.7",
-                margin: 0,
-                paddingLeft: "8px",
-              }}
-            >
-              {result.riskScore > 70
-                ? "🚫 DO NOT engage with this message. Block the sender immediately. Never click links, reply, or call any numbers provided. Report this as spam to your carrier."
-                : result.riskScore > 30
-                ? "⚠️ Be cautious. Do not share personal information, click suspicious links, or call unknown numbers. Verify the sender through official channels."
-                : "✓ This message appears safe. However, always verify unexpected requests, especially those asking for personal information or money transfers."}
-            </p>
-          </div>
-
-          {/* ✅ FIXED: Feedback Section with Toggle */}
-          {showFeedback && !feedbackSubmitted && (
-            <div
-              style={{
-                background: "white",
-                borderRadius: "24px",
-                padding: "32px",
-                marginBottom: "24px",
-                boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
-                border: "1px solid #e2e8f0",
-              }}
-            >
-              <div style={{ textAlign: "center", marginBottom: "24px" }}>
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    background:
-                      "linear-gradient(135deg, #f093fb20 0%, #f5576c20 100%)",
-                    padding: "8px 20px",
-                    borderRadius: "100px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <FaThumbsUp style={{ color: "#f5576c" }} />
-                  <span style={{ fontWeight: "600", color: "#f5576c" }}>
-                    Help Us Improve
-                  </span>
-                </div>
-                <h3
-                  style={{
-                    fontSize: "24px",
-                    fontWeight: "700",
-                    color: "#1e293b",
-                  }}
-                >
-                  Was this detection accurate?
-                </h3>
-                <p style={{ color: "#64748b", marginTop: "8px" }}>
-                  Your feedback helps us train better AI models
-                </p>
-              </div>
-
-              <div style={{ marginBottom: "12px", fontSize: "12px", color: "#94a3b8" }}>
-                Scan ID: {scanId || "Not set"}
-              </div>
-
-              <div style={{ marginBottom: "24px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    marginBottom: "12px",
-                    fontWeight: "600",
-                    color: "#1e293b",
-                    fontSize: "14px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  Was the detection accurate?
-                </label>
-                <div style={{ display: "flex", gap: "16px" }}>
-                  <button
-                    type="button"
-                    onClick={() => handleAccuracySelect(true)}
-                    style={{
-                      flex: 1,
-                      padding: "14px",
-                      background:
-                        feedback.isAccurate === true ? "#10b981" : "#f8fafc",
-                      color:
-                        feedback.isAccurate === true ? "white" : "#64748b",
-                      border: feedback.isAccurate === true ? "2px solid #10b981" : "2px solid #e2e8f0",
-                      borderRadius: "14px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      transition: "all 0.3s ease",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <FaThumbsUp />
-                    Yes, accurate
-                    {feedback.isAccurate === true && (
-                      <span style={{ marginLeft: "8px", fontSize: "12px" }}>✓</span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAccuracySelect(false)}
-                    style={{
-                      flex: 1,
-                      padding: "14px",
-                      background:
-                        feedback.isAccurate === false ? "#ef4444" : "#f8fafc",
-                      color:
-                        feedback.isAccurate === false ? "white" : "#64748b",
-                      border: feedback.isAccurate === false ? "2px solid #ef4444" : "2px solid #e2e8f0",
-                      borderRadius: "14px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      transition: "all 0.3s ease",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <FaThumbsDown />
-                    No, inaccurate
-                    {feedback.isAccurate === false && (
-                      <span style={{ marginLeft: "8px", fontSize: "12px" }}>✓</span>
-                    )}
-                  </button>
-                </div>
-                {accuracyError && (
-                  <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "8px", textAlign: "center" }}>
-                    ❌ {accuracyError}
-                  </p>
-                )}
-                {accuracySubmitted && feedback.isAccurate !== null && (
-                  <p style={{ fontSize: "12px", color: "#10b981", marginTop: "8px", textAlign: "center" }}>
-                    ✓ Accuracy feedback submitted successfully
-                  </p>
-                )}
-              </div>
-
-              <form onSubmit={handleFeedbackSubmit}>
-                <div style={{ marginBottom: "28px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "8px",
-                      fontWeight: "600",
-                      color: "#1e293b",
-                      fontSize: "14px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    Your Feedback *
-                  </label>
-                  <textarea
-                    rows="4"
-                    value={feedback.comments}
-                    onChange={(e) =>
-                      setFeedback({ ...feedback, comments: e.target.value })
-                    }
-                    placeholder="Tell us about your experience... What could we improve?"
-                    style={{
-                      width: "100%",
-                      padding: "16px",
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "16px",
-                      fontSize: "14px",
-                      fontFamily: "inherit",
-                      resize: "vertical",
-                      transition: "all 0.3s ease",
-                      outline: "none",
-                    }}
-                    onFocus={(e) => (e.target.style.borderColor = "#f5576c")}
-                    onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
-                    required
-                  />
-                  <p
-                    style={{
-                      fontSize: "12px",
-                      color: "#94a3b8",
-                      marginTop: "8px",
-                      textAlign: "right",
-                    }}
-                  >
-                    {feedback.comments.length}/500 characters
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={{
-                    width: "100%",
-                    background: submitting
-                      ? "#94a3b8"
-                      : "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                    color: "white",
-                    padding: "16px",
-                    border: "none",
-                    borderRadius: "16px",
-                    fontSize: "16px",
-                    fontWeight: "700",
-                    cursor: submitting ? "not-allowed" : "pointer",
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  {submitting ? (
-                    <>
-                      <FaSpinner className="spinning" />
-                      <span> Submitting Feedback...</span>
-                    </>
-                  ) : (
-                    "Submit Feedback"
-                  )}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {feedbackSubmitted && (
-            <div
-              style={{
-                marginBottom: "24px",
-                padding: "32px",
-                background:
-                  "linear-gradient(135deg, #10b98115 0%, #05966915 100%)",
-                borderRadius: "24px",
-                textAlign: "center",
-                border: "1px solid #10b98130",
-              }}
-            >
-              <div
-                style={{
-                  width: "80px",
-                  height: "80px",
-                  background:
-                    "linear-gradient(135deg, #10b98120 0%, #05966920 100%)",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 20px",
-                }}
-              >
-                <FaCheckCircle style={{ fontSize: "48px", color: "#10b981" }} />
-              </div>
-              <h3
-                style={{
-                  fontSize: "24px",
-                  fontWeight: "700",
-                  color: "#1e293b",
-                  marginBottom: "12px",
-                }}
-              >
-                Thank You for Your Feedback!
-              </h3>
-              {feedbackReply && (
-                <div
-                  style={{
-                    padding: "16px",
-                    background: "#f1f5f9",
-                    borderRadius: "12px",
-                    marginTop: "12px",
-                    maxWidth: "480px",
-                    marginLeft: "auto",
-                    marginRight: "auto",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "14px",
-                      color: "#475569",
-                      fontStyle: "italic",
-                      margin: 0,
-                    }}
-                  >
-                    💬 "{feedbackReply}"
-                  </p>
+            {/* Message Phishing Reasons */}
+            {result._raw?.messagePhishingReasons &&
+              result._raw.messagePhishingReasons.length > 0 && (
+                <div className="reasons-card danger">
+                  <h4>🚨 Message Phishing Indicators</h4>
+                  <ul>
+                    {result._raw.messagePhishingReasons.map((reason, index) => (
+                      <li key={index}>{reason}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
-              <p style={{ color: "#64748b", marginTop: "12px" }}>
-                Your feedback helps us improve our AI models and make the
-                internet safer for everyone.
+
+            {/* URLs Found */}
+            {result._raw?.urlsFound && result._raw.urlsFound.length > 0 && (
+              <div className="reasons-card warning">
+                <h4>
+                  <FaLink /> URLs Found in Message
+                </h4>
+                <div>
+                  {result._raw.urlsFound.map((url, index) => {
+                    const urlResult = result._raw.urlResults?.[index];
+                    return (
+                      <div key={index} className="url-item">
+                        <p>{url}</p>
+                        {urlResult && (
+                          <div className="url-note">
+                            <span
+                              className={
+                                urlResult.prediction === "LEGITIMATE"
+                                  ? "badge badge-success"
+                                  : "badge badge-danger"
+                              }
+                            >
+                              {urlResult.prediction || "UNKNOWN"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Recommendation */}
+            <div className="recommendation">
+              <div className="rec-head">
+                <div className="rec-icon">🛡️</div>
+                <div>
+                  <h3>Security Recommendation</h3>
+                  <p>What you should do next</p>
+                </div>
+              </div>
+              <p>
+                {result.riskScore > 70
+                  ? "🚫 DO NOT engage with this message. Block the sender immediately. Never click links, reply, or call any numbers provided. Report this as spam to your carrier."
+                  : result.riskScore > 30
+                    ? "⚠️ Be cautious. Do not share personal information, click suspicious links, or call unknown numbers. Verify the sender through official channels."
+                    : "✓ This message appears safe. However, always verify unexpected requests, especially those asking for personal information or money transfers."}
               </p>
             </div>
-          )}
-        </div>
-      )}
 
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        initialMode="register"
-        onSuccess={() => {
-          setShowAuthModal(false);
-          toast.success("Welcome! You can now download reports.");
-        }}
-      />
+            {/* Feedback */}
+            {showFeedback && !feedbackSubmitted && (
+              <div className="feedback-card">
+                <div className="feedback-head">
+                  <span className="eyebrow">
+                    <FaThumbsUp /> Help Us Improve
+                  </span>
+                  <h3>Was this detection accurate?</h3>
+                  <p>Your feedback helps us train better AI models</p>
+                  <span className="field-hint">
+                    Scan ID: {scanId || "Not set"}
+                  </span>
+                </div>
 
-      <style>{`
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        .spinning {
-          animation: spin 1s linear infinite;
-        }
-      `}</style>
+                <div className="field">
+                  <label className="label">Was the detection accurate?</label>
+                  <div className="accuracy-btns">
+                    <button
+                      type="button"
+                      className={`accuracy-btn yes${
+                        feedback.isAccurate === true ? " active" : ""
+                      }`}
+                      onClick={() => handleAccuracySelect(true)}
+                    >
+                      <FaThumbsUp /> Yes, accurate
+                      {feedback.isAccurate === true && <span>✓</span>}
+                    </button>
+                    <button
+                      type="button"
+                      className={`accuracy-btn no${
+                        feedback.isAccurate === false ? " active" : ""
+                      }`}
+                      onClick={() => handleAccuracySelect(false)}
+                    >
+                      <FaThumbsDown /> No, inaccurate
+                      {feedback.isAccurate === false && <span>✓</span>}
+                    </button>
+                  </div>
+                  {accuracyError && (
+                    <p
+                      className="text-center"
+                      style={{
+                        color: "var(--danger)",
+                        fontSize: 12,
+                        marginTop: 8,
+                      }}
+                    >
+                      ❌ {accuracyError}
+                    </p>
+                  )}
+                  {accuracySubmitted && feedback.isAccurate !== null && (
+                    <p
+                      className="text-center"
+                      style={{
+                        color: "var(--success)",
+                        fontSize: 12,
+                        marginTop: 8,
+                      }}
+                    >
+                      ✓ Accuracy feedback submitted successfully
+                    </p>
+                  )}
+                </div>
+
+                <form onSubmit={handleFeedbackSubmit}>
+                  <div className="field">
+                    <label className="label" htmlFor="fb-comments">
+                      Your Feedback *
+                    </label>
+                    <textarea
+                      id="fb-comments"
+                      className="textarea"
+                      rows="4"
+                      value={feedback.comments}
+                      onChange={(e) =>
+                        setFeedback({ ...feedback, comments: e.target.value })
+                      }
+                      placeholder="Tell us about your experience... What could we improve?"
+                      required
+                    />
+                    <p className="field-hint" style={{ textAlign: "right" }}>
+                      {feedback.comments.length}/500 characters
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-block btn-lg"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <FaSpinner className="spinning" /> Submitting Feedback...
+                      </>
+                    ) : (
+                      "Submit Feedback"
+                    )}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {feedbackSubmitted && (
+              <div className="success-card">
+                <div className="success-icon">
+                  <FaCheckCircle />
+                </div>
+                <h3>Thank You for Your Feedback!</h3>
+                {feedbackReply && (
+                  <div
+                    className="result-box"
+                    style={{ maxWidth: 480, margin: "12px auto 0" }}
+                  >
+                    <p style={{ fontStyle: "italic", margin: 0 }}>
+                      💬 "{feedbackReply}"
+                    </p>
+                  </div>
+                )}
+                <p style={{ marginTop: 12 }}>
+                  Your feedback helps us improve our AI models and make the
+                  internet safer for everyone.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+          initialMode="register"
+          onSuccess={() => {
+            setShowAuthModal(false);
+            toast.success("Welcome! You can now download reports.");
+          }}
+        />
+      </div>
     </div>
   );
 };
