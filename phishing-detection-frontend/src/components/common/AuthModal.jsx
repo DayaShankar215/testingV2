@@ -187,7 +187,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login", onSuccess }) => {
               />
             </div>
             {mode === "register" && (
-              <span className="field-hint">Minimum 6 characters</span>
+              <span className="field-hint">Minimum 8 characters</span>
             )}
           </div>
 
