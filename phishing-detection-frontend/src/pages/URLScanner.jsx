@@ -1,5 +1,6 @@
 // pages/URLScanner.jsx
 import React, { useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   scanURL,
   submitFeedbackMessage,
@@ -27,7 +28,8 @@ import {
 import toast from "react-hot-toast";
 
 const URLScanner = () => {
-  const [url, setUrl] = useState("");
+  const location = useLocation();
+  const [url, setUrl] = useState(() => location.state?.url || "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);

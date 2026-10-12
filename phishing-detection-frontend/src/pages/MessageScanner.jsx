@@ -1,5 +1,6 @@
 // pages/MessageScanner.jsx
 import React, { useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   scanMessage,
   submitFeedbackMessage,
@@ -29,7 +30,8 @@ import {
 import toast from "react-hot-toast";
 
 const MessageScanner = () => {
-  const [message, setMessage] = useState("");
+  const location = useLocation();
+  const [message, setMessage] = useState(() => location.state?.message || "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);

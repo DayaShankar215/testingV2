@@ -1,0 +1,26 @@
+{
+  "name": "SecureShield — AI Phishing & Scam Detection",
+  "short_name": "SecureShield",
+  "description": "Detect phishing URLs and scam messages instantly with AI-powered analysis and clear risk explanations.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f6fb",
+  "theme_color": "#6366f1",
+  "categories": ["security", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -268,6 +268,15 @@ const Navbar = () => {
             })}
 
             <div className="drawer-foot">
+              <button
+                className="btn btn-secondary btn-block"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
+                }}
+              >
+                <FaSearch size={14} /> Search & Commands
+              </button>
               {isAuthenticated ? (
                 <>
                   <div className="dropdown-user" style={{ border: 0 }}>
