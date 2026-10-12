@@ -7,7 +7,7 @@ const LoadingSpinner = ({ text = "Loading..." }) => {
       <ThreeDots
         height="64"
         width="64"
-        color="var(--brand)"
+        color="#6366f1"
         ariaLabel="loading"
         visible={true}
       />
