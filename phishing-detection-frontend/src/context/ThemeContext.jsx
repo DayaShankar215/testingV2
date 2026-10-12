@@ -12,40 +12,43 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
-    // Check localStorage for saved theme
-    const saved = localStorage.getItem("appTheme");
-    return saved || "system";
+    return localStorage.getItem("appTheme") || "system";
   });
-  const [currentTheme, setCurrentTheme] = useState("light");
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    const saved = localStorage.getItem("appTheme") || "system";
+    if (saved === "system") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+    }
+    return saved;
+  });
 
-  // Detect system preference
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
-    const handleChange = (e) => {
+    const applyTheme = () => {
+      let resolved = theme;
       if (theme === "system") {
-        setCurrentTheme(e.matches ? "dark" : "light");
+        resolved = mediaQuery.matches ? "dark" : "light";
       }
+      setCurrentTheme(resolved);
+      document.documentElement.setAttribute("data-theme", resolved);
+      document.documentElement.style.colorScheme = resolved;
+    };
+
+    applyTheme();
+    localStorage.setItem("appTheme", theme);
+
+    const handleChange = () => {
+      if (theme === "system") applyTheme();
     };
 
     mediaQuery.addEventListener("change", handleChange);
-
-    // Initial check
-    if (theme === "system") {
-      setCurrentTheme(mediaQuery.matches ? "dark" : "light");
-    } else {
-      setCurrentTheme(theme);
-    }
-
-    // Save to localStorage
-    localStorage.setItem("appTheme", theme);
-
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme]);
 
-  const toggleTheme = (mode) => {
-    setTheme(mode);
-  };
+  const toggleTheme = (mode) => setTheme(mode);
 
   const value = {
     theme,
