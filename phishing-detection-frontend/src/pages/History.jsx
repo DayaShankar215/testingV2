@@ -8,6 +8,7 @@ import {
 } from "../services/api";
 import Skeleton from "../components/common/Skeleton";
 import { formatDate, truncateText } from "../utils/formatters";
+import { getFeedbackState } from "../utils/feedback";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
 import {
@@ -30,6 +31,7 @@ import {
   FaFileCsv,
   FaExclamationTriangle,
   FaCheckCircle,
+  FaFlag,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { exportScansToCsv } from "../utils/exportCsv";
@@ -54,6 +56,7 @@ const History = () => {
     total: 0,
     url: 0,
     message: 0,
+    feedbackGiven: 0,
   });
 
   const { isAuthenticated } = useAuth();
@@ -163,7 +166,10 @@ const History = () => {
     const total = scans.length;
     const url = scans.filter((s) => s?.type === "url").length;
     const message = scans.filter((s) => s?.type === "message").length;
-    setStats({ total, url, message });
+    const feedbackGiven = scans.filter(
+      (s) => getFeedbackState(s) === true,
+    ).length;
+    setStats({ total, url, message, feedbackGiven });
   };
 
   const getDateFilteredScans = (scansList) => {
@@ -498,7 +504,7 @@ const History = () => {
             />
           </div>
           <div className="stat-grid" style={{ marginBottom: 32 }}>
-            {[0, 1, 2].map((i) => (
+            {[0, 1, 2, 3].map((i) => (
               <div className="stat-card" key={i}>
                 <Skeleton className="skeleton-circle" width={48} height={48} />
                 <Skeleton width="45%" height={30} style={{ marginTop: 18 }} />
@@ -565,6 +571,16 @@ const History = () => {
             </div>
             <div className="stat-value">{stats.message}</div>
             <div className="stat-label">Message Scans</div>
+          </div>
+          <div className="stat-card">
+            <div
+              className="stat-icon"
+              style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+            >
+              <FaFlag />
+            </div>
+            <div className="stat-value">{stats.feedbackGiven}</div>
+            <div className="stat-label">Feedback Given</div>
           </div>
         </div>
 
@@ -738,6 +754,7 @@ const History = () => {
                   <th>Type</th>
                   <th>Content</th>
                   <th>Prediction</th>
+                  <th>Feedback</th>
                   <th>Date</th>
                   <th>Actions</th>
                 </tr>
@@ -745,7 +762,7 @@ const History = () => {
               <tbody>
                 {filteredScans.length === 0 ? (
                   <tr>
-                    <td colSpan="7">
+                    <td colSpan="8">
                       <div className="empty-state">
                         <div className="empty-icon">
                           <FaShieldAlt />
@@ -773,6 +790,7 @@ const History = () => {
                     const tone = predictionTone(prediction);
                     const showDelete = isAuthenticated && !isGuest;
                     const isMessage = scan?.type === "message";
+                    const feedbackState = getFeedbackState(scan);
 
                     return (
                       <tr key={reference || `scan_${index}`}>
@@ -810,6 +828,23 @@ const History = () => {
                         </td>
                         <td>
                           <span className={`badge badge-${tone}`}>{prediction}</span>
+                        </td>
+                        <td>
+                          {feedbackState === true ? (
+                            <span
+                              className="badge badge-success"
+                              title="Feedback provided for this scan"
+                            >
+                              <FaFlag size={11} /> Provided
+                            </span>
+                          ) : (
+                            <span
+                              className="badge badge-neutral"
+                              title="No feedback provided for this scan"
+                            >
+                              <FaTimes size={11} /> Not provided
+                            </span>
+                          )}
                         </td>
                         <td style={{ color: "var(--text-3)" }}>
                           <span className="flex items-center gap-1">
