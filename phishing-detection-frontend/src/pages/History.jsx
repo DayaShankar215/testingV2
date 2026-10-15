@@ -1,5 +1,6 @@
 // pages/History.jsx
 import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   getScanHistory,
   getScanByReference,
@@ -9,7 +10,6 @@ import Skeleton from "../components/common/Skeleton";
 import { formatDate, truncateText } from "../utils/formatters";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
-import AuthModal from "../components/common/AuthModal";
 import {
   FaSearch,
   FaEye,
@@ -43,7 +43,6 @@ const History = () => {
   const [showModal, setShowModal] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     phishing: true,
     legitimate: true,
@@ -59,6 +58,8 @@ const History = () => {
 
   const { isAuthenticated } = useAuth();
   const { scans: guestScans } = useGuest();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [dateFilter, setDateFilter] = useState({
     preset: "all",
@@ -256,7 +257,7 @@ const History = () => {
 
   const handleViewDetails = async (reference) => {
     if (!isAuthenticated) {
-      setShowAuthModal(true);
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
 
@@ -297,7 +298,7 @@ const History = () => {
 
   const handleDownloadReport = async (reference) => {
     if (!isAuthenticated) {
-      setShowAuthModal(true);
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
 
@@ -349,7 +350,7 @@ const History = () => {
 
   const handleDeleteScan = async (reference) => {
     if (!isAuthenticated) {
-      setShowAuthModal(true);
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
 
@@ -1208,16 +1209,6 @@ const History = () => {
             </div>
           </div>
         )}
-
-        <AuthModal
-          isOpen={showAuthModal}
-          onClose={() => setShowAuthModal(false)}
-          initialMode="register"
-          onSuccess={() => {
-            setShowAuthModal(false);
-            fetchHistory();
-          }}
-        />
       </div>
     </div>
   );

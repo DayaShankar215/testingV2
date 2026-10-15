@@ -923,6 +923,62 @@
   font-size: 14px;
 }
 .auth-switch button:hover { text-decoration: underline; }
+
+/* Auth pages (login / register) */
+.auth-page {
+  position: relative;
+  min-height: calc(100vh - var(--nav-h) - 140px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 46px 20px 60px;
+}
+.auth-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    620px 340px at 50% 0%,
+    rgba(99, 102, 241, 0.1),
+    transparent 72%
+  );
+}
+.auth-card {
+  position: relative;
+  width: 100%;
+  max-width: 464px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-lg);
+  padding: 38px 34px;
+}
+.auth-head .brand-mark { margin: 0 auto 14px; }
+.auth-perks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0 4px;
+  padding: 15px 18px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--divider);
+}
+.auth-perks span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.auth-perks svg { color: var(--success); font-size: 14px; }
+.auth-switch a { color: var(--brand); font-weight: 600; }
+.auth-switch a:hover { text-decoration: underline; }
+
+@media (max-width: 520px) {
+  .auth-card { padding: 30px 22px; border-radius: var(--r-lg); }
+}
 .checkbox-row {
   display: flex;
   align-items: center;

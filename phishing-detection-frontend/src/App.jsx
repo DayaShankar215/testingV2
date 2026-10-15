@@ -19,6 +19,8 @@ import URLScanner from "./pages/URLScanner";
 import MessageScanner from "./pages/MessageScanner";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
 const AppContent = () => {
@@ -59,6 +61,8 @@ const AppContent = () => {
                   </ProtectedRoute>
                 }
               />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </ErrorBoundary>

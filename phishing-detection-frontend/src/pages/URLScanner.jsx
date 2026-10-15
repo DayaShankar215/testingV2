@@ -1,6 +1,6 @@
 // pages/URLScanner.jsx
 import React, { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   scanURL,
   submitFeedbackMessage,
@@ -9,7 +9,6 @@ import {
 } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
-import AuthModal from "../components/common/AuthModal";
 import {
   FaShieldAlt,
   FaInfoCircle,
@@ -33,13 +32,13 @@ import toast from "react-hot-toast";
 
 const URLScanner = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [url, setUrl] = useState(() => location.state?.url || "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
 
   const { isAuthenticated } = useAuth();
@@ -205,7 +204,7 @@ const URLScanner = () => {
     if (!result || downloading) return;
 
     if (!isAuthenticated) {
-      setShowAuthModal(true);
+      navigate("/login", { state: { from: location.pathname } });
       return;
     }
 
@@ -749,16 +748,6 @@ const URLScanner = () => {
             )}
           </div>
         )}
-
-        <AuthModal
-          isOpen={showAuthModal}
-          onClose={() => setShowAuthModal(false)}
-          initialMode="register"
-          onSuccess={() => {
-            setShowAuthModal(false);
-            toast.success("Welcome! You can now download reports.");
-          }}
-        />
       </div>
     </div>
   );

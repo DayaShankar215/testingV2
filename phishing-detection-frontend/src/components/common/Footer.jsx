@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   FaShieldAlt,
   FaArrowUp,
@@ -15,12 +15,12 @@ import {
   FaUserCircle,
 } from "react-icons/fa";
 import { useAuth } from "../../context/AuthContext";
-import { OPEN_AUTH_EVENT } from "./CommandPalette";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
   const [showScrollTop, setShowScrollTop] = useState(false);
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => setShowScrollTop(window.scrollY > 300);
@@ -30,10 +30,7 @@ const Footer = () => {
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
-  const openAuth = () =>
-    window.dispatchEvent(
-      new CustomEvent(OPEN_AUTH_EVENT, { detail: { mode: "login" } })
-    );
+  const openAuth = () => navigate("/login");
 
   return (
     <>

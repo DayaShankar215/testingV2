@@ -1,8 +1,14 @@
 // context/GuestContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { v4 as uuidv4 } from "uuid";
 
 const GUEST_STORAGE_KEY = "guest_data";
+
+const generateId = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `g-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 const GuestContext = createContext();
 
@@ -26,9 +32,9 @@ export const GuestProvider = ({ children }) => {
         if (stored) {
           const data = JSON.parse(stored);
           setScans(data.scans || []);
-          setSessionId(data.sessionId || uuidv4());
+          setSessionId(data.sessionId || generateId());
         } else {
-          const newSessionId = uuidv4();
+          const newSessionId = generateId();
           setSessionId(newSessionId);
           localStorage.setItem(
             GUEST_STORAGE_KEY,
@@ -40,7 +46,7 @@ export const GuestProvider = ({ children }) => {
         }
       } catch (error) {
         console.error("Failed to load guest data:", error);
-        const newSessionId = uuidv4();
+        const newSessionId = generateId();
         setSessionId(newSessionId);
       }
       setIsInitialized(true);

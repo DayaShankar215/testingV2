@@ -36,7 +36,6 @@ import {
   Legend,
 } from "recharts";
 import toast from "react-hot-toast";
-import AuthModal from "../components/common/AuthModal";
 import AnimatedNumber from "../components/common/AnimatedNumber";
 import Skeleton from "../components/common/Skeleton";
 import { useTheme } from "../context/ThemeContext";
@@ -51,7 +50,6 @@ const Dashboard = () => {
     weeklyData: [],
   });
   const [loading, setLoading] = useState(true);
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
@@ -742,7 +740,7 @@ const Dashboard = () => {
             </p>
             <button
               className="btn btn-primary"
-              onClick={() => setShowAuthModal(true)}
+              onClick={() => navigate("/register")}
             >
               Sign Up Free
             </button>
@@ -854,16 +852,6 @@ const Dashboard = () => {
             </div>
           )}
         </div>
-
-        <AuthModal
-          isOpen={showAuthModal}
-          onClose={() => setShowAuthModal(false)}
-          initialMode="register"
-          onSuccess={() => {
-            setShowAuthModal(false);
-            fetchDashboardStats();
-          }}
-        />
       </div>
     </div>
   );

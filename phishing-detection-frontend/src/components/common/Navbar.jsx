@@ -17,8 +17,7 @@ import {
 } from "react-icons/fa";
 import ThemeToggle from "./ThemeToggle";
 import { useAuth } from "../../context/AuthContext";
-import AuthModal from "./AuthModal";
-import { OPEN_AUTH_EVENT, OPEN_PALETTE_EVENT } from "./CommandPalette";
+import { OPEN_PALETTE_EVENT } from "./CommandPalette";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: FaHome },
@@ -35,8 +34,6 @@ const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState("login");
 
   const { isAuthenticated, user, logout } = useAuth();
 
@@ -79,21 +76,12 @@ const Navbar = () => {
     };
   }, [drawerOpen]);
 
-  useEffect(() => {
-    const onOpenAuth = (e) => {
-      setAuthMode(e.detail?.mode || "login");
-      setShowAuthModal(true);
-    };
-    window.addEventListener(OPEN_AUTH_EVENT, onOpenAuth);
-    return () => window.removeEventListener(OPEN_AUTH_EVENT, onOpenAuth);
-  }, []);
-
   const isActive = (path) => location.pathname === path;
 
   const handleAuthClick = (mode) => {
-    setAuthMode(mode);
-    setShowAuthModal(true);
     setDrawerOpen(false);
+    setShowUserMenu(false);
+    navigate(mode === "login" ? "/login" : "/register");
   };
 
   const handleLogout = async () => {
@@ -101,11 +89,6 @@ const Navbar = () => {
     setShowUserMenu(false);
     setDrawerOpen(false);
     navigate("/");
-  };
-
-  const handleAuthSuccess = () => {
-    setShowAuthModal(false);
-    window.location.reload();
   };
 
   const initial = (user?.firstName || "U").charAt(0).toUpperCase();
@@ -324,13 +307,6 @@ const Navbar = () => {
           </aside>
         </>
       )}
-
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        initialMode={authMode}
-        onSuccess={handleAuthSuccess}
-      />
     </>
   );
 };

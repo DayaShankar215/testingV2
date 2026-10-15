@@ -25,7 +25,6 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useGuest } from "../../context/GuestContext";
 
-export const OPEN_AUTH_EVENT = "secureshield:open-auth";
 export const OPEN_PALETTE_EVENT = "secureshield:open-palette";
 
 const CommandPalette = () => {
@@ -178,14 +177,14 @@ const CommandPalette = () => {
           hint: "Access your account",
           icon: FaSignInAlt,
           keywords: "login sign in account",
-          perform: () => window.dispatchEvent(new CustomEvent(OPEN_AUTH_EVENT, { detail: { mode: "login" } })),
+          perform: () => go("/login"),
         },
         {
           label: "Create an account",
           hint: "Sign up free",
           icon: FaUserPlus,
           keywords: "register sign up create account",
-          perform: () => window.dispatchEvent(new CustomEvent(OPEN_AUTH_EVENT, { detail: { mode: "register" } })),
+          perform: () => go("/register"),
         },
       );
     }
