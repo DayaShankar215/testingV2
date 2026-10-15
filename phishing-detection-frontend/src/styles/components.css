@@ -1488,6 +1488,11 @@
   animation: shimmer 1.4s infinite;
   border-radius: var(--r-sm);
 }
+.skeleton-title { height: 40px; width: 40%; max-width: 340px; border-radius: var(--r-md); }
+.skeleton-sub { height: 16px; width: 60%; max-width: 480px; margin-top: 14px; }
+.skeleton-line { height: 14px; width: 100%; }
+.skeleton-circle { border-radius: 50%; }
+.skeleton-block { border-radius: var(--r-lg); }
 
 /* ------------------------------------------------------------
    LOADING / SPINNERS

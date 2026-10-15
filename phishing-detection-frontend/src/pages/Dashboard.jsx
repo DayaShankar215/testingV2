@@ -38,6 +38,7 @@ import {
 import toast from "react-hot-toast";
 import AuthModal from "../components/common/AuthModal";
 import AnimatedNumber from "../components/common/AnimatedNumber";
+import Skeleton from "../components/common/Skeleton";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -420,8 +421,32 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="loading" role="status" aria-live="polite">
-        <span className="spinner spinner-lg" aria-hidden="true" />
+      <div className="page" aria-busy="true" aria-live="polite">
+        <div className="container">
+          <div className="section-head">
+            <div style={{ width: "100%" }}>
+              <Skeleton className="skeleton-title" />
+              <Skeleton className="skeleton-sub" />
+            </div>
+          </div>
+          <div className="stat-grid" style={{ marginBottom: 40 }}>
+            {[0, 1, 2, 3].map((i) => (
+              <div className="stat-card" key={i}>
+                <Skeleton className="skeleton-circle" width={48} height={48} />
+                <Skeleton width="45%" height={30} style={{ marginTop: 18 }} />
+                <Skeleton width="70%" height={14} style={{ marginTop: 10 }} />
+              </div>
+            ))}
+          </div>
+          <div className="charts-row">
+            <div className="chart-card">
+              <Skeleton className="skeleton-block" style={{ height: 320 }} />
+            </div>
+            <div className="chart-card">
+              <Skeleton className="skeleton-block" style={{ height: 320 }} />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

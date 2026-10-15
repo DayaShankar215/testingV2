@@ -35,7 +35,7 @@ const api = axios.create({
     "Content-Type": "application/json",
     "Accept": "application/json",
   },
-  timeout: 20000,
+  timeout: 30000,
 });
 
 // --- Request Interceptor ---
@@ -90,6 +90,13 @@ api.interceptors.response.use(
       const errorData = error.response.data || { message: "Server error occurred" };
       errorData.status = error.response.status;
       throw errorData;
+    }
+    if (error.code === "ECONNABORTED") {
+      throw {
+        message:
+          "The server took too long to respond. Please try again in a moment.",
+        isTimeout: true,
+      };
     }
     throw { message: error.message || "An error occurred" };
   }

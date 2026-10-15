@@ -5,7 +5,7 @@ import {
   getScanByReference,
   deleteScanByReference,
 } from "../services/api";
-import LoadingSpinner from "../components/common/LoadingSpinner";
+import Skeleton from "../components/common/Skeleton";
 import { formatDate, truncateText } from "../utils/formatters";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
@@ -485,7 +485,35 @@ const History = () => {
   };
 
   if (loading) {
-    return <LoadingSpinner text="Loading security history..." />;
+    return (
+      <div className="page" aria-busy="true" aria-live="polite">
+        <div className="container container-wide">
+          <div className="text-center" style={{ marginBottom: 32 }}>
+            <Skeleton className="skeleton-title" style={{ margin: "0 auto" }} />
+            <Skeleton
+              className="skeleton-sub"
+              style={{ margin: "16px auto 0" }}
+            />
+          </div>
+          <div className="stat-grid" style={{ marginBottom: 32 }}>
+            {[0, 1, 2].map((i) => (
+              <div className="stat-card" key={i}>
+                <Skeleton className="skeleton-circle" width={48} height={48} />
+                <Skeleton width="45%" height={30} style={{ marginTop: 18 }} />
+                <Skeleton width="70%" height={14} style={{ marginTop: 10 }} />
+              </div>
+            ))}
+          </div>
+          <div className="panel">
+            <div className="card-pad">
+              {[...Array(6)].map((_, i) => (
+                <Skeleton key={i} height={46} style={{ marginBottom: 12 }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
