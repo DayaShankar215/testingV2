@@ -435,6 +435,7 @@ const MessageScanner = () => {
               <button
                 type="submit"
                 className="btn btn-primary btn-lg"
+                style={{ alignSelf: "center" }}
                 disabled={loading}
               >
                 {loading ? (
