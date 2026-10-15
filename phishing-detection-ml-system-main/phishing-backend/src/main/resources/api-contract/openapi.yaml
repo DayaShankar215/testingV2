@@ -1,0 +1,730 @@
+openapi: 3.1.0
+
+info:
+  title: SecureShield Backend API
+  version: 1.0.0
+  description: |
+    SecureShield Backend REST API for phishing and scam detection.
+
+    This API provides:
+      - User authentication
+      - URL and message scanning
+      - Scan history
+      - Dashboard statistics
+      - Feedback management
+
+servers:
+  - url: https://mud-cable-passerby.ngrok-free.dev
+    description: Public ngrok server
+
+tags:
+  - name: Authentication
+    description: User registration and authentication
+
+  - name: Users
+    description: User profile management
+
+  - name: Scans
+    description: URL and message scanning operations
+
+  - name: Dashboard
+    description: Dashboard statistics
+
+  - name: Feedback
+    description: User feedback operations
+
+paths:
+
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+
+      summary: Register a new user
+
+      operationId: registerUser
+
+      security: [ ]
+
+      requestBody:
+        required: true
+
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+
+      responses:
+
+        "201":
+          description: User registered successfully
+
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+        "409":
+          description: Email already exists
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+
+      summary: Authenticate user
+
+      operationId: loginUser
+
+      security: [ ]
+
+      requestBody:
+        required: true
+
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+
+      responses:
+
+        "200":
+          description: Login successful
+
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+
+        "401":
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: [ ]
+      summary: Logout current user
+
+      operationId: logoutUser
+
+      responses:
+
+        "204":
+          description: Logout successful
+
+  /scans/url:
+    post:
+      tags:
+        - Scans
+      security:
+        - bearerAuth: [ ]
+        - { }
+      summary: Analyze a URL for Phishing
+      operationId: scanUrl
+      description: |
+        Allows users to scan a URL without authentication.
+        Returns a lightweight phishing detection response
+      requestBody:
+        required: true
+        description: The URL you want to analyze.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanRequest"
+      responses:
+        "200":
+          description: Scan completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResponse"
+  /scans:
+    get:
+      tags:
+        - Scans
+      security:
+        - bearerAuth: [ ]
+      summary: Retrieve all scans
+      operationId: getAllScans
+      description: Retrieves the authenticated user's all scan history.By default, both URL and message scans are returned.Optionally, results can be filtered by scan type using the `type` query parameter..
+      parameters:
+        - name: type
+          in: query
+          required: false
+          description: Filter scan history by scan type.
+          schema:
+            $ref: "#/components/schemas/ScanType"
+      responses:
+        "200":
+          description: Scan history retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanHistoryResponse"
+
+  /scans/messages:
+    post:
+      tags:
+        - Scans
+      security:
+        - bearerAuth: [ ]
+        - { }
+      summary: Analyze a message for phishing
+
+      operationId: scanMessage
+
+      description: |
+        Analyzes a message for phishing or scam content.
+        The message may contain plain text, URLs, or both.
+        URL extraction and combined prediction are performed by the Flask ML service.
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageScanRequest"
+
+      responses:
+        "200":
+          description: Message scan completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageScanResponse"
+
+
+
+  /scans/{reference}:
+    get:
+      tags:
+        - Scans
+
+      security:
+        - bearerAuth: [ ]
+
+      summary: Retrieve scan details
+      operationId: getScanByReference
+      description: Fetches the full details for a specific scan using its unique reference ID.
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scan retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanReportResponse"
+
+    delete:
+      tags:
+        - Scans
+
+      security:
+        - bearerAuth: [ ]
+
+      summary: Delete a scan
+      operationId: deleteScan
+      description: Permanently removes a scan details from the history using its unique reference.
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          description: The unique reference identifier of the scan to be deleted.
+          schema:
+            type: string
+            example: "SCAN-91299ddf-7a80-4fc8-b95c-5f7108d47f5f"
+      responses:
+        "200":
+          description: Scan deleted successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Scan deleted successfully."
+
+  /dashboard/statistics:
+    get:
+      tags:
+        - Dashboard
+      summary: Retrieve dashboard statistics
+      operationId: getDashboardStatistics
+      responses:
+        "200":
+          description: Dashboard statistics retrieved successfully
+
+  /feedback:
+    post:
+      tags:
+        - Feedback
+      summary: Submit user feedback
+      description: Submit user feedback for specific scanid or  general feedback
+      operationId: submitFeedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        "201":
+          description: Feedback submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+
+    get:
+      tags:
+        - Feedback
+      summary: Get all feedback
+      operationId: getFeedback
+      responses:
+        "200":
+          description: All feedback
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeedbackResponse'
+
+  /feedback/accuracy:
+    post:
+      tags:
+        - Feedback
+      summary: Submit prediction accuracy feedback
+      operationId: submitAccuracyFeedback
+      security:
+        - bearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccuracyFeedbackRequest'
+            example:
+              reference: "SCAN-20260730-0001"
+              accurate: true
+      responses:
+        '201':
+          description: Accuracy feedback submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccuracyFeedbackResponse'
+
+components:
+  schemas:
+    ScanRequest:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
+          example: "https://accounts.google.com"
+
+    AccuracyFeedbackRequest:
+      type: object
+      required:
+        - reference
+        - accurate
+      properties:
+
+        reference:
+          type: string
+          description: Reference of the scan.
+          example: "SCAN-20260730-0001"
+
+        accurate:
+          type: boolean
+          description: Indicates whether the prediction was accurate.
+          example: true
+
+    AccuracyFeedbackResponse:
+      type: object
+      properties:
+
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the accuracy feedback.
+          example: "8f4a1c7e-3b2d-4a1f-9e5c-2d7b8a6f4e10"
+
+        reference:
+          type: string
+          description: Reference of the scan.
+          example: "SCAN-20260730-0001"
+
+        accurate:
+          type: boolean
+          description: Indicates whether the user marked the prediction as accurate.
+          example: true
+
+        reply:
+          type: string
+          description: Auto-generated acknowledgement message.
+          example: "Thank you for helping improve SecureShield!"
+
+    Prediction:
+      type: string
+      description: Final prediction.
+      enum:
+        - LEGITIMATE
+        - PHISHING
+
+
+
+    ScanResponse:
+      type: object
+      properties:
+        reference:
+          type: string
+          description: Unique reference identifier of the scan.
+          example: "SCAN-20260709-0001"
+
+        scanType:
+          $ref: "#/components/schemas/ScanType"
+
+        url:
+          type: string
+          description: URL that was scanned.
+          example: "https://accounts.google.com"
+
+        overallPrediction:
+          $ref: "#/components/schemas/Prediction"
+
+        conclusion:
+          type: string
+          description: Short summary of the prediction for immediate display.
+          example: "The phishing-oriented features exerted a stronger overall influence than the legitimate-oriented features."
+
+    ScanHistoryItem:
+      type: object
+      properties:
+        reference:
+          type: string
+          description: Unique reference identifier of the scan.
+          example: "SCAN-20260709-0001"
+
+        scanType:
+          $ref: "#/components/schemas/ScanType"
+
+        url:
+          type: string
+          nullable: true
+          description: URL that was scanned.
+          example: "https://accounts.google.com"
+
+        message:
+          type: string
+          nullable: true
+
+        overallPrediction:
+          $ref: "#/components/schemas/Prediction"
+
+        conclusion:
+          type: string
+          description: Short summary of the prediction for immediate display.
+          example: "The phishing-oriented features exerted a stronger overall influence than the legitimate-oriented features."
+
+        scannedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the URL was scanned.
+          example: "2026-07-09T15:20:31"
+
+    ScanHistoryResponse:
+      type: object
+      properties:
+        scans:
+          type: array
+          description: List of previously scanned URLs.
+          items:
+            $ref: "#/components/schemas/ScanHistoryItem"
+
+
+
+    ScanReportResponse:
+      oneOf:
+        - $ref: "#/components/schemas/UrlScanReportResponse"
+        - $ref: "#/components/schemas/MessageScanReportResponse"
+
+    UrlScanReportResponse:
+      type: object
+
+      properties:
+
+        reference:
+          type: string
+
+        scanType:
+          $ref: "#/components/schemas/ScanType"
+
+        url:
+          type: string
+
+        overallPrediction:
+          $ref: "#/components/schemas/Prediction"
+
+        formattedExplanation:
+          type: string
+
+        conclusion:
+          type: string
+
+        legitimateReasons:
+          type: array
+          items:
+            type: string
+
+        phishingReasons:
+          type: array
+          items:
+            type: string
+
+        scannedAt:
+          type: string
+          format: date-time
+
+    MessageScanReportResponse:
+      type: object
+
+      properties:
+
+        reference:
+          type: string
+
+        scanType:
+          $ref: "#/components/schemas/ScanType"
+
+        message:
+          type: string
+
+        overallPrediction:
+          $ref: "#/components/schemas/Prediction"
+
+        messagePrediction:
+          $ref: "#/components/schemas/Prediction"
+
+        messageLegitimateReasons:
+          type: array
+          items:
+            type: string
+
+        messagePhishingReasons:
+          type: array
+          items:
+            type: string
+
+        urlsFound:
+          type: array
+          items:
+            type: string
+
+        urlResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/UrlAnalysis"
+
+        scannedAt:
+          type: string
+          format: date-time
+
+    UrlAnalysis:
+      type: object
+
+      properties:
+
+        prediction:
+          $ref: "#/components/schemas/Prediction"
+
+        legitimateReasons:
+          type: array
+          items:
+            type: string
+
+        phishingReasons:
+          type: array
+          items:
+            type: string
+
+        formattedExplanation:
+          type: string
+
+        conclusion:
+          type: string
+
+    MessageScanRequest:
+      type: object
+
+      required:
+        - message
+
+      properties:
+
+        message:
+          type: string
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
+          example: "Congratulations! Click https://google.com to claim your reward."
+
+    MessageScanResponse:
+      type: object
+
+      properties:
+
+        reference:
+          type: string
+          example: "SCAN-20260726-0002"
+
+        scanType:
+          $ref: "#/components/schemas/ScanType"
+
+        overallPrediction:
+          $ref: "#/components/schemas/Prediction"
+
+        scannedAt:
+          type: string
+          format: date-time
+
+        urlsDetected:
+          type: integer
+          format: int32
+          description: Number of URLs detected in the submitted message.
+          example: 1
+
+    RegisterRequest:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+
+      properties:
+        firstName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Bini
+
+        lastName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Pandey
+
+        email:
+          type: string
+          format: email
+          example: bini@example.com
+
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: Password@123
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+
+      properties:
+        email:
+          type: string
+          format: email
+          example: bini@example.com
+
+        password:
+          type: string
+          format: password
+          example: Password@123
+
+
+    AuthResponse:
+      type: object
+      required:
+        - accessToken
+        - user
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token
+        user:
+          $ref: "#/components/schemas/UserResponse"
+
+    UserRole:
+      type: string
+      enum:
+        - USER
+        - ADMIN
+
+    UserResponse:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - role
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/UserRole"
+
+    FeedbackRequest:
+      type: object
+      required:
+        - message
+      example:
+        message: "Prediction was wrong"
+      properties:
+        reference:
+          type: string
+          nullable: true
+          description: Optional reference for scan-specific feedback.
+        message:
+          type: string
+
+    FeedbackResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "8f4a1c7e-3b2d-4a1f-9e5c-2d7b8a6f4e10"
+
+        message:
+          type: string
+          example: "Prediction was wrong"
+
+        reply:
+          type: string
+          example: "Thank you for your feedback. We will review it."
+
+    ScanType:
+      type: string
+      enum:
+        - URL
+        - MESSAGE
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

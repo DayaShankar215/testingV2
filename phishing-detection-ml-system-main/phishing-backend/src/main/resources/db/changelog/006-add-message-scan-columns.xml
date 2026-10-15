@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="006-add-message-scan-columns" author="bini">
+
+        <addColumn tableName="scan">
+
+            <column name="scan_type" type="VARCHAR(20)"
+                    defaultValue="URL">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="message" type="TEXT"/>
+
+            <column name="message_prediction" type="VARCHAR(20)"/>
+
+            <column name="message_legitimate_reasons" type="JSONB"/>
+
+            <column name="message_phishing_reasons" type="JSONB"/>
+
+            <column name="urls_found" type="JSONB"/>
+
+            <column name="url_results" type="JSONB"/>
+
+        </addColumn>
+
+        <dropNotNullConstraint
+                tableName="scan"
+                columnName="url"
+                columnDataType="TEXT"/>
+
+    </changeSet>
+
+</databaseChangeLog>

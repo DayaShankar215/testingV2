@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="007-create-feedback-table" author="bini">
+
+        <createTable tableName="feedback">
+
+            <column name="id" type="UUID">
+                <constraints
+                        primaryKey="true"
+                        nullable="false"/>
+            </column>
+
+            <column name="user_id" type="UUID">
+                <constraints
+                        nullable="false"/>
+            </column>
+
+            <column name="scan_id" type="UUID">
+                <constraints
+                        nullable="false"/>
+            </column>
+
+            <column name="message" type="TEXT">
+                <constraints
+                        nullable="false"/>
+            </column>
+
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints
+                        nullable="false"/>
+            </column>
+
+        </createTable>
+
+
+        <addForeignKeyConstraint
+                baseTableName="feedback"
+                baseColumnNames="user_id"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                constraintName="fk_feedback_user"/>
+
+
+        <addForeignKeyConstraint
+                baseTableName="feedback"
+                baseColumnNames="scan_id"
+                referencedTableName="scan"
+                referencedColumnNames="id"
+                constraintName="fk_feedback_scan"/>
+
+    </changeSet>
+</databaseChangeLog>

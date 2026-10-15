@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <include file="001-create-scan-table.xml" relativeToChangelogFile="true"/>
+    <include file="002-create-event-publication.xml" relativeToChangelogFile="true"/>
+    <include file="003-create-user-table.xml" relativeToChangelogFile="true"/>
+    <include file="004-rename-user-table.xml" relativeToChangelogFile="true"/>
+    <include file="005-add-user-id-to-scan.xml" relativeToChangelogFile="true"/>
+    <include file="006-add-message-scan-columns.xml" relativeToChangelogFile="true"/>
+    <include file="007-create-feedback-table.xml" relativeToChangelogFile="true"/>
+    <include file="008-make-feedback-scan-id-nullable.xml" relativeToChangelogFile="true"/>
+    <include file="009-update-feedback-table-for-accuracy.xml" relativeToChangelogFile="true"/>
+
+
+</databaseChangeLog>

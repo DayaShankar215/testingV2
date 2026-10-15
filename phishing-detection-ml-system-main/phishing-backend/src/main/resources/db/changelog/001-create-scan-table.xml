@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="001-create-scan-table" author="bini">
+
+        <createTable tableName="scan">
+
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="reference" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+
+            <column name="url" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="prediction" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="conclusion" type="TEXT"/>
+
+            <column name="formatted_explanation" type="TEXT"/>
+
+            <column name="phishing_reasons" type="JSONB"/>
+
+            <column name="legitimate_reasons" type="JSONB"/>
+
+            <column name="scanned_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+        </createTable>
+
+    </changeSet>
+</databaseChangeLog>
