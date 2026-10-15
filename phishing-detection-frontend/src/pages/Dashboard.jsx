@@ -431,7 +431,7 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div className="page" aria-busy="true" aria-live="polite">
-        <div className="container">
+        <div className="container container-wide">
           <div className="section-head">
             <div style={{ width: "100%" }}>
               <Skeleton className="skeleton-title" />
@@ -462,7 +462,7 @@ const Dashboard = () => {
 
   return (
     <div className="page">
-      <div className="container">
+      <div className="container container-wide">
         {/* Welcome Section */}
         <div className="section-head">
           <div>
