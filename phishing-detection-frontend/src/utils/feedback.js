@@ -26,13 +26,20 @@ const normalize = (entry) => {
 };
 
 // kind: "accuracy" | "comment". For "accuracy", `accurate` is optional metadata.
-export const recordFeedback = (reference, kind = "accuracy", accurate) => {
+// For "comment", `text` stores the submitted comment body.
+export const recordFeedback = (
+  reference,
+  kind = "accuracy",
+  accurate,
+  text,
+) => {
   if (!reference) return;
   try {
     const map = readStore();
     const entry = normalize(map[reference]);
     if (kind === "comment") {
       entry.comment = true;
+      if (text) entry.commentText = text;
     } else {
       entry.accuracy = accurate === undefined ? true : accurate;
     }
@@ -43,10 +50,16 @@ export const recordFeedback = (reference, kind = "accuracy", accurate) => {
   }
 };
 
+// Returns the raw normalized feedback entry for a reference (local only).
+export const getLocalFeedback = (reference) => {
+  if (!reference) return undefined;
+  const entry = readStore()[reference];
+  return entry === undefined ? undefined : normalize(entry);
+};
+
 // Returns the list of feedback kinds recorded locally for a reference.
 export const getLocalFeedbackKinds = (reference) => {
-  if (!reference) return [];
-  const entry = normalize(readStore()[reference]);
+  const entry = getLocalFeedback(reference) || {};
   const kinds = [];
   if (entry.accuracy !== undefined) kinds.push("accuracy");
   if (entry.comment) kinds.push("comment");
@@ -108,3 +121,46 @@ export const getFeedbackKinds = (scan) => {
 
 export const feedbackKindLabel = (kind) =>
   kind === "comment" ? "Comment" : "Accuracy";
+
+// Returns the free-text feedback comment for a scan, if available.
+// Checks the local record first, then common backend fields.
+export const getFeedbackComment = (scan) => {
+  const raw = scan?._raw || scan || {};
+
+  const candidates = [
+    raw.feedbackComment,
+    raw.comment,
+    raw.userFeedback?.comment,
+    raw.feedback?.comment,
+    raw.feedback?.message,
+    raw.message2,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+
+  const local = getLocalFeedback(scan?.reference);
+  if (local?.commentText) return local.commentText;
+  return "";
+};
+
+// Returns the accuracy feedback for a scan: true (accurate), false
+// (inaccurate), or null when none.
+export const getFeedbackAccuracy = (scan) => {
+  const raw = scan?._raw || scan || {};
+
+  const candidates = [
+    raw.isAccurate,
+    raw.accurate,
+    raw.feedback?.accurate,
+    raw.userFeedback?.accurate,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "boolean") return c;
+  }
+
+  const local = getLocalFeedback(scan?.reference);
+  if (local && typeof local.accuracy === "boolean") return local.accuracy;
+  return null;
+};
+

@@ -333,7 +333,7 @@ const URLScanner = () => {
       }
 
       setFeedbackSubmitted(true);
-      recordFeedback(scanId, "comment");
+      recordFeedback(scanId, "comment", undefined, feedback.comments);
       toast.success("Thank you for your feedback!");
 
       setTimeout(() => {

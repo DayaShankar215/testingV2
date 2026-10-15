@@ -8,7 +8,12 @@ import {
 } from "../services/api";
 import Skeleton from "../components/common/Skeleton";
 import { formatDate, truncateText } from "../utils/formatters";
-import { getFeedbackState, getFeedbackKinds } from "../utils/feedback";
+import {
+  getFeedbackState,
+  getFeedbackKinds,
+  getFeedbackComment,
+  getFeedbackAccuracy,
+} from "../utils/feedback";
 import { exportScansToExcel } from "../utils/exportExcel";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
@@ -293,6 +298,8 @@ const History = () => {
         urlResults: response.urlResults || [],
         overallPrediction: response.overallPrediction,
         explanation: response.explanation,
+        feedbackComment: getFeedbackComment(response),
+        feedbackAccuracy: getFeedbackAccuracy(response),
         _raw: response,
       });
       setShowModal(true);
@@ -1238,6 +1245,63 @@ const History = () => {
                   <div className="detail-block">
                     <div className="detail-label">Conclusion</div>
                     <div className="detail-value">{selectedScan.conclusion}</div>
+                  </div>
+                )}
+
+                {/* User Feedback */}
+                {(selectedScan.feedbackComment ||
+                  selectedScan.feedbackAccuracy !== null) && (
+                  <div className="detail-block">
+                    <div className="detail-label">User Feedback</div>
+
+                    {selectedScan.feedbackAccuracy !== null && (
+                      <div style={{ marginBottom: 10 }}>
+                        <span
+                          className={`badge ${
+                            selectedScan.feedbackAccuracy
+                              ? "badge-success"
+                              : "badge-danger"
+                          }`}
+                        >
+                          {selectedScan.feedbackAccuracy ? (
+                            <>
+                              <FaCheckCircle size={12} /> Marked accurate
+                            </>
+                          ) : (
+                            <>
+                              <FaTimes size={12} /> Marked inaccurate
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedScan.feedbackComment ? (
+                      <div
+                        className="result-box"
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "flex-start",
+                          textAlign: "left",
+                        }}
+                      >
+                        <FaComment
+                          style={{
+                            marginTop: 3,
+                            flexShrink: 0,
+                            color: "var(--brand)",
+                          }}
+                        />
+                        <span style={{ whiteSpace: "pre-wrap" }}>
+                          {selectedScan.feedbackComment}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-muted" style={{ fontSize: 13 }}>
+                        No comment provided.
+                      </span>
+                    )}
                   </div>
                 )}
 
