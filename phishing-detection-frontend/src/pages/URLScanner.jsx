@@ -298,7 +298,7 @@ const URLScanner = () => {
 
       console.log("Accuracy Response:", response);
       setAccuracySubmitted(true);
-      recordFeedback(scanId, isAccurate);
+      recordFeedback(scanId, "accuracy", isAccurate);
 
       if (response?.reply) {
         toast.success(response.reply);
@@ -333,6 +333,7 @@ const URLScanner = () => {
       }
 
       setFeedbackSubmitted(true);
+      recordFeedback(scanId, "comment");
       toast.success("Thank you for your feedback!");
 
       setTimeout(() => {

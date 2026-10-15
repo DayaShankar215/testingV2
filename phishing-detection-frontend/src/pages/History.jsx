@@ -8,7 +8,8 @@ import {
 } from "../services/api";
 import Skeleton from "../components/common/Skeleton";
 import { formatDate, truncateText } from "../utils/formatters";
-import { getFeedbackState } from "../utils/feedback";
+import { getFeedbackState, getFeedbackKinds } from "../utils/feedback";
+import { exportScansToExcel } from "../utils/exportExcel";
 import { useAuth } from "../context/AuthContext";
 import { useGuest } from "../context/GuestContext";
 import {
@@ -28,13 +29,12 @@ import {
   FaSortNumericDown,
   FaChevronDown,
   FaChevronUp,
-  FaFileCsv,
+  FaFileExcel,
   FaExclamationTriangle,
   FaCheckCircle,
   FaFlag,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
-import { exportScansToCsv } from "../utils/exportCsv";
 
 const History = () => {
   const [scans, setScans] = useState([]);
@@ -479,17 +479,22 @@ const History = () => {
     }));
   };
 
-  const handleExportCsv = () => {
+  const handleExportExcel = () => {
     if (!filteredScans || filteredScans.length === 0) {
       toast.error("No scans to export");
       return;
     }
     const stamp = new Date().toISOString().slice(0, 10);
-    const ok = exportScansToCsv(
-      filteredScans,
-      `secureshield-history-${stamp}.csv`,
-    );
-    if (ok) toast.success(`Exported ${filteredScans.length} scans to CSV`);
+    try {
+      exportScansToExcel(
+        filteredScans,
+        `secureshield-history-${stamp}.xlsx`,
+      );
+      toast.success(`Exported ${filteredScans.length} scans to Excel`);
+    } catch (error) {
+      console.error("Excel export failed:", error);
+      toast.error("Failed to export Excel file");
+    }
   };
 
   if (loading) {
@@ -633,12 +638,12 @@ const History = () => {
 
           <button
             className="btn btn-secondary btn-sm"
-            onClick={handleExportCsv}
+            onClick={handleExportExcel}
             disabled={filteredScans.length === 0}
-            title="Export filtered scans to CSV"
+            title="Export filtered scans to Excel"
           >
-            <FaFileCsv />
-            Export CSV
+            <FaFileExcel />
+            Export Excel
           </button>
 
           <div className="search-wrap">
@@ -791,6 +796,7 @@ const History = () => {
                     const showDelete = isAuthenticated && !isGuest;
                     const isMessage = scan?.type === "message";
                     const feedbackState = getFeedbackState(scan);
+                    const feedbackKinds = getFeedbackKinds(scan);
 
                     return (
                       <tr key={reference || `scan_${index}`}>
@@ -833,9 +839,28 @@ const History = () => {
                           {feedbackState === true ? (
                             <span
                               className="badge badge-success"
-                              title="Feedback provided for this scan"
+                              title={`Feedback provided: ${
+                                feedbackKinds.length > 0
+                                  ? feedbackKinds
+                                      .map((k) =>
+                                        k === "comment"
+                                          ? "Comment"
+                                          : "Accuracy (accurate / inaccurate)",
+                                      )
+                                      .join(" • ")
+                                  : "Yes"
+                              }`}
                             >
                               <FaFlag size={11} /> Provided
+                              <span style={{ opacity: 0.85, fontWeight: 500 }}>
+                                ({feedbackKinds.length > 0
+                                  ? feedbackKinds
+                                      .map((k) =>
+                                        k === "comment" ? "C" : "A",
+                                      )
+                                      .join("+")
+                                  : "A"})
+                              </span>
                             </span>
                           ) : (
                             <span
