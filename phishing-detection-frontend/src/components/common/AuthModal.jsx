@@ -62,12 +62,6 @@ const AuthModal = ({ isOpen, onClose, initialMode = "login", onSuccess }) => {
         response = await register({ firstName, lastName, email, password });
       }
 
-      toast.success(
-        mode === "login"
-          ? "Welcome back! 🎉"
-          : "Account created successfully! 🎉",
-      );
-
       if (onSuccess) {
         onSuccess(response);
       }

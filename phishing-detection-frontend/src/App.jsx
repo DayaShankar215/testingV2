@@ -33,8 +33,11 @@ const AppContent = () => {
       <ScrollToTop />
       <GlobalLoadingBar />
       <div className="app-shell">
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
         <Navbar />
-        <main className="app-main">
+        <main id="main-content" className="app-main">
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />

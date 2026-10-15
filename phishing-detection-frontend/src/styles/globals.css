@@ -149,6 +149,7 @@ body {
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
   transition: background-color var(--t), color var(--t);
 }
 
@@ -260,11 +261,13 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 800;
   letter-spacing: -0.03em;
   margin-bottom: 12px;
+  text-wrap: balance;
 }
 
 .section-title {
   font-size: clamp(1.25rem, 2.5vw, 1.6rem);
   font-weight: 700;
+  text-wrap: balance;
 }
 
 .eyebrow {
@@ -401,4 +404,33 @@ h1, h2, h3, h4, h5, h6 {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ------------------------------------------------------------
+   POLISH
+   ------------------------------------------------------------ */
+.stat-value,
+.data-table td,
+.data-table th,
+.results-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-title {
+  text-wrap: balance;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+/* Respect users who prefer reduced transparency */
+@media (prefers-reduced-transparency: reduce) {
+  .navbar,
+  .global-loading-hint,
+  .modal-overlay,
+  .palette-overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }

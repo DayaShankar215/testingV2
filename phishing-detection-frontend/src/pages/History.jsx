@@ -29,6 +29,8 @@ import {
   FaChevronDown,
   FaChevronUp,
   FaFileCsv,
+  FaExclamationTriangle,
+  FaCheckCircle,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { exportScansToCsv } from "../utils/exportCsv";
@@ -379,7 +381,7 @@ const History = () => {
       console.error("[DELETE] Error:", error);
 
       if (error.status === 403) {
-        toast.error(`🔒 ${error.message || "Permission denied"}`, {
+        toast.error(`${error.message || "Permission denied"}`, {
           id: toastId,
           duration: 5000,
         });
@@ -956,7 +958,9 @@ const History = () => {
                         className="collapsible-head"
                         onClick={() => toggleSection("phishing")}
                       >
-                        <h3>🚨 Message Phishing Indicators</h3>
+                        <h3>
+                          <FaExclamationTriangle /> Message Phishing Indicators
+                        </h3>
                         {expandedSections.phishing ? (
                           <FaChevronUp size={14} />
                         ) : (
@@ -987,7 +991,9 @@ const History = () => {
                         className="collapsible-head"
                         onClick={() => toggleSection("legitimate")}
                       >
-                        <h3>✅ Message Legitimate Indicators</h3>
+                        <h3>
+                          <FaCheckCircle /> Message Legitimate Indicators
+                        </h3>
                         {expandedSections.legitimate ? (
                           <FaChevronUp size={14} />
                         ) : (
@@ -1018,7 +1024,9 @@ const History = () => {
                         className="collapsible-head"
                         onClick={() => toggleSection("urlPhishing")}
                       >
-                        <h3>🚨 URL Phishing Indicators</h3>
+                        <h3>
+                          <FaExclamationTriangle /> URL Phishing Indicators
+                        </h3>
                         {expandedSections.urlPhishing ? (
                           <FaChevronUp size={14} />
                         ) : (
@@ -1049,7 +1057,9 @@ const History = () => {
                         className="collapsible-head"
                         onClick={() => toggleSection("urlLegitimate")}
                       >
-                        <h3>✅ URL Legitimate Indicators</h3>
+                        <h3>
+                          <FaCheckCircle /> URL Legitimate Indicators
+                        </h3>
                         {expandedSections.urlLegitimate ? (
                           <FaChevronUp size={14} />
                         ) : (
@@ -1080,7 +1090,9 @@ const History = () => {
                         className="collapsible-head"
                         onClick={() => toggleSection("urls")}
                       >
-                        <h3>🔗 URLs Found in Message</h3>
+                        <h3>
+                          <FaLink /> URLs Found in Message
+                        </h3>
                         {expandedSections.urls ? (
                           <FaChevronUp size={14} />
                         ) : (
@@ -1116,7 +1128,7 @@ const History = () => {
                                           color: "var(--success-text)",
                                         }}
                                       >
-                                        ✅ Legitimate:{" "}
+                                        <FaCheckCircle size={12} /> Legitimate:{" "}
                                         {urlResult.legitimateReasons[0]}
                                         {urlResult.legitimateReasons.length > 1 && (
                                           <span className="text-muted" style={{ marginLeft: 4 }}>
@@ -1133,7 +1145,8 @@ const History = () => {
                                           color: "var(--danger-text)",
                                         }}
                                       >
-                                        🚨 Phishing: {urlResult.phishingReasons[0]}
+                                        <FaExclamationTriangle size={12} />{" "}
+                                        Phishing: {urlResult.phishingReasons[0]}
                                         {urlResult.phishingReasons.length > 1 && (
                                           <span className="text-muted" style={{ marginLeft: 4 }}>
                                             +{urlResult.phishingReasons.length - 1} more

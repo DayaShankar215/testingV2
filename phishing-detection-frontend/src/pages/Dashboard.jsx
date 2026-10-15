@@ -39,6 +39,7 @@ import toast from "react-hot-toast";
 import AuthModal from "../components/common/AuthModal";
 import AnimatedNumber from "../components/common/AnimatedNumber";
 import Skeleton from "../components/common/Skeleton";
+import { useTheme } from "../context/ThemeContext";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -55,6 +56,14 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
   const { getStats: getGuestStats, scans: guestScans } = useGuest();
+  const { isDark } = useTheme();
+
+  const chartColors = {
+    grid: isDark ? "#232f48" : "#eef1f7",
+    axis: isDark ? "#8b97ad" : "#64748b",
+    pieStroke: isDark ? "#101728" : "#ffffff",
+    legend: "var(--text-2)",
+  };
 
   useEffect(() => {
     fetchDashboardStats();
@@ -469,7 +478,8 @@ const Dashboard = () => {
             </p>
             {!isAuthenticated && (
               <span className="badge badge-neutral" style={{ marginTop: 12 }}>
-                👋 Guest mode • Sign up to save your scan history
+                <FaUserPlus size={12} /> Guest mode • Sign up to save your scan
+                history
               </span>
             )}
           </div>
@@ -488,7 +498,7 @@ const Dashboard = () => {
           <div className="hero-body">
             <div className="hero-tags">
               <span className="hero-tag">
-                🛡️ AI-POWERED THREAT DETECTION
+                <FaShieldAlt size={12} /> AI-POWERED THREAT DETECTION
               </span>
               <span className="hero-tag live">
                 <span className="dot" />
@@ -590,9 +600,25 @@ const Dashboard = () => {
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={chartColors.grid}
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="day"
+                    stroke={chartColors.axis}
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={{ stroke: chartColors.grid }}
+                  />
+                  <YAxis
+                    stroke={chartColors.axis}
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
                   <Tooltip content={<CustomTooltip />} />
                   <Area
                     type="monotone"
@@ -647,7 +673,7 @@ const Dashboard = () => {
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    labelLine={true}
+                    labelLine={{ stroke: chartColors.axis }}
                     label={({ name, percent, value }) =>
                       value > 0 ? `${name}: ${(percent * 100).toFixed(1)}%` : ""
                     }
@@ -661,7 +687,7 @@ const Dashboard = () => {
                       <Cell
                         key={`cell-${index}`}
                         fill={entry.color}
-                        stroke="white"
+                        stroke={chartColors.pieStroke}
                         strokeWidth={2}
                       />
                     ))}
@@ -678,6 +704,7 @@ const Dashboard = () => {
                   <Legend
                     verticalAlign="bottom"
                     height={36}
+                    wrapperStyle={{ color: chartColors.legend }}
                     formatter={(value) => {
                       const item = pieData.find((d) => d.name === value);
                       return `${value}: ${item?.percentage || 0}%`;

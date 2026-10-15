@@ -21,9 +21,9 @@ export const formatRiskScore = (score) => {
 };
 
 export const getRiskLevel = (score) => {
-  if (score > 70) return { label: 'High Risk', color: '#ef4444', icon: '⚠️' };
-  if (score > 30) return { label: 'Medium Risk', color: '#f59e0b', icon: '⚡' };
-  return { label: 'Low Risk', color: '#10b981', icon: '✅' };
+  if (score > 70) return { label: 'High Risk', color: '#ef4444' };
+  if (score > 30) return { label: 'Medium Risk', color: '#f59e0b' };
+  return { label: 'Low Risk', color: '#10b981' };
 };
 
 export const truncateText = (text, maxLength = 100) => {

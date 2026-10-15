@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
       const response = await apiRegister(userData);
       setUser(response.user);
       setIsAuthenticatedState(true);
-      toast.success("Account created successfully! 🎉");
+      toast.success("Account created successfully!");
       return response;
     } catch (error) {
       toast.error(error.message || "Registration failed");
@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
       const response = await apiLogin(credentials);
       setUser(response.user);
       setIsAuthenticatedState(true);
-      toast.success("Welcome back! 🎉");
+      toast.success("Welcome back!");
       return response;
     } catch (error) {
       toast.error(error.message || "Login failed");

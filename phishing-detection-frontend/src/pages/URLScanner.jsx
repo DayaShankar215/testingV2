@@ -24,6 +24,11 @@ import {
   FaExclamationCircle,
   FaWifi,
   FaFilePdf,
+  FaTag,
+  FaClipboardList,
+  FaCheck,
+  FaTimesCircle,
+  FaCommentDots,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -328,7 +333,7 @@ const URLScanner = () => {
       }
 
       setFeedbackSubmitted(true);
-      toast.success("Thank you for your feedback! 🎉");
+      toast.success("Thank you for your feedback!");
 
       setTimeout(() => {
         setShowFeedback(false);
@@ -350,7 +355,7 @@ const URLScanner = () => {
         color: "#ef4444",
         bg: "var(--danger-soft)",
         border: "#fca5a5",
-        icon: "🚨",
+        Icon: FaExclamationTriangle,
         badge: "Phishing",
       };
     if (score > 30)
@@ -359,7 +364,7 @@ const URLScanner = () => {
         color: "#f59e0b",
         bg: "var(--warning-soft)",
         border: "#fcd34d",
-        icon: "⚠️",
+        Icon: FaExclamationCircle,
         badge: "Suspicious",
       };
     return {
@@ -367,7 +372,7 @@ const URLScanner = () => {
       color: "#10b981",
       bg: "var(--success-soft)",
       border: "#6ee7b7",
-      icon: "✅",
+      Icon: FaCheckCircle,
       badge: "Safe",
     };
   };
@@ -397,7 +402,8 @@ const URLScanner = () => {
           </p>
           {!isAuthenticated && (
             <span className="badge badge-neutral" style={{ marginTop: 14 }}>
-              👋 Guest mode • Sign up to save your scan history
+              <FaUserPlus size={13} /> Guest mode • Sign up to save your scan
+              history
             </span>
           )}
         </div>
@@ -454,7 +460,7 @@ const URLScanner = () => {
           <div className="alert alert-danger">
             <FaExclamationCircle size={26} />
             <div style={{ flex: 1 }}>
-              <div className="alert-title">⚠️ Connection Error</div>
+              <div className="alert-title">Connection Error</div>
               <p>
                 {error ||
                   "Cannot connect to the server. Please check your connection."}
@@ -490,7 +496,8 @@ const URLScanner = () => {
               <div className="risk-gauge">
                 <div className="risk-meta">
                   <span className="risk-label">
-                    {riskLevel.icon} {riskLevel.label}
+                    <riskLevel.Icon size={14} aria-hidden="true" />
+                    {riskLevel.label}
                   </span>
                   <h3>{result.prediction || result.classification}</h3>
                 </div>
@@ -499,7 +506,9 @@ const URLScanner = () => {
               <div className="result-grid">
                 <div className="result-tile">
                   <div className="result-tile-head">
-                    <div className="result-tile-icon">🏷️</div>
+                    <div className="result-tile-icon">
+                      <FaTag />
+                    </div>
                     <div>
                       <h3>Classification</h3>
                       <p>AI-Powered Prediction</p>
@@ -522,7 +531,9 @@ const URLScanner = () => {
 
                 <div className="result-tile">
                   <div className="result-tile-head">
-                    <div className="result-tile-icon">📋</div>
+                    <div className="result-tile-icon">
+                      <FaClipboardList />
+                    </div>
                     <div>
                       <h3>Analysis Details</h3>
                       <p>Key Indicators</p>
@@ -563,7 +574,9 @@ const URLScanner = () => {
             {/* Reasons */}
             {result.phishingReasons && result.phishingReasons.length > 0 && (
               <div className="reasons-card danger">
-                <h4>🚨 Phishing Indicators</h4>
+                <h4>
+                  <FaExclamationTriangle /> Phishing Indicators
+                </h4>
                 <ul>
                   {result.phishingReasons.map((reason, index) => (
                     <li key={index}>{reason}</li>
@@ -575,7 +588,9 @@ const URLScanner = () => {
             {result.legitimateReasons &&
               result.legitimateReasons.length > 0 && (
                 <div className="reasons-card success">
-                  <h4>✅ Legitimate Indicators</h4>
+                  <h4>
+                    <FaCheckCircle /> Legitimate Indicators
+                  </h4>
                   <ul>
                     {result.legitimateReasons.map((reason, index) => (
                       <li key={index}>{reason}</li>
@@ -587,7 +602,9 @@ const URLScanner = () => {
             {/* Recommendation */}
             <div className="recommendation">
               <div className="rec-head">
-                <div className="rec-icon">🛡️</div>
+                <div className="rec-icon">
+                  <FaShieldAlt />
+                </div>
                 <div>
                   <h3>Security Recommendation</h3>
                   <p>What you should do next</p>
@@ -595,10 +612,10 @@ const URLScanner = () => {
               </div>
               <p>
                 {result.riskScore > 70
-                  ? "🚫 DO NOT proceed to this website. Report this URL to security authorities immediately. This is a confirmed phishing attempt designed to steal your credentials."
+                  ? "DO NOT proceed to this website. Report this URL to security authorities immediately. This is a confirmed phishing attempt designed to steal your credentials."
                   : result.riskScore > 30
-                    ? "⚠️ Exercise extreme caution. Verify the website's authenticity through official channels before entering any personal information or credentials."
-                    : "✅ You can safely proceed. However, always verify the URL matches the official website before entering sensitive information."}
+                    ? "Exercise extreme caution. Verify the website's authenticity through official channels before entering any personal information or credentials."
+                    : "You can safely proceed. However, always verify the URL matches the official website before entering sensitive information."}
               </p>
             </div>
 
@@ -627,7 +644,11 @@ const URLScanner = () => {
                       onClick={() => handleAccuracySelect(true)}
                     >
                       <FaThumbsUp /> Yes, accurate
-                      {feedback.isAccurate === true && <span>✓</span>}
+                      {feedback.isAccurate === true && (
+                        <span className="acc-check">
+                          <FaCheck size={11} />
+                        </span>
+                      )}
                     </button>
                     <button
                       type="button"
@@ -637,17 +658,22 @@ const URLScanner = () => {
                       onClick={() => handleAccuracySelect(false)}
                     >
                       <FaThumbsDown /> No, inaccurate
-                      {feedback.isAccurate === false && <span>✓</span>}
+                      {feedback.isAccurate === false && (
+                        <span className="acc-check">
+                          <FaCheck size={11} />
+                        </span>
+                      )}
                     </button>
                   </div>
                   {accuracyError && (
                     <p className="text-center" style={{ color: "var(--danger)", fontSize: 12, marginTop: 8 }}>
-                      ❌ {accuracyError}
+                      <FaTimesCircle /> {accuracyError}
                     </p>
                   )}
                   {accuracySubmitted && feedback.isAccurate !== null && (
                     <p className="text-center" style={{ color: "var(--success)", fontSize: 12, marginTop: 8 }}>
-                      ✓ Accuracy feedback submitted successfully
+                      <FaCheck size={11} /> Accuracy feedback submitted
+                      successfully
                     </p>
                   )}
                 </div>
@@ -701,8 +727,18 @@ const URLScanner = () => {
                     className="result-box"
                     style={{ maxWidth: 480, margin: "12px auto 0" }}
                   >
-                    <p style={{ fontStyle: "italic", margin: 0 }}>
-                      💬 "{feedbackReply}"
+                    <p
+                      style={{
+                        fontStyle: "italic",
+                        margin: 0,
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "flex-start",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <FaCommentDots style={{ marginTop: 3 }} />{" "}
+                      <span>&ldquo;{feedbackReply}&rdquo;</span>
                     </p>
                   </div>
                 )}

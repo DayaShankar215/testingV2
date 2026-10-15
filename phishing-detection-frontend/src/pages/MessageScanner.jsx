@@ -26,6 +26,11 @@ import {
   FaFilePdf,
   FaWhatsapp,
   FaLink,
+  FaTag,
+  FaClipboardList,
+  FaCheck,
+  FaTimesCircle,
+  FaCommentDots,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -325,7 +330,7 @@ const MessageScanner = () => {
       }
 
       setFeedbackSubmitted(true);
-      toast.success("Thank you for your feedback! 🎉");
+      toast.success("Thank you for your feedback!");
 
       setTimeout(() => {
         setShowFeedback(false);
@@ -347,7 +352,7 @@ const MessageScanner = () => {
         color: "#ef4444",
         bg: "var(--danger-soft)",
         border: "#fca5a5",
-        icon: "🚨",
+        Icon: FaExclamationTriangle,
         badge: "Scam",
       };
     if (score > 30)
@@ -356,7 +361,7 @@ const MessageScanner = () => {
         color: "#f59e0b",
         bg: "var(--warning-soft)",
         border: "#fcd34d",
-        icon: "⚠️",
+        Icon: FaExclamationCircle,
         badge: "Suspicious",
       };
     return {
@@ -364,7 +369,7 @@ const MessageScanner = () => {
       color: "#10b981",
       bg: "var(--success-soft)",
       border: "#6ee7b7",
-      icon: "✅",
+      Icon: FaCheckCircle,
       badge: "Safe",
     };
   };
@@ -393,7 +398,8 @@ const MessageScanner = () => {
           </p>
           {!isAuthenticated && (
             <span className="badge badge-neutral" style={{ marginTop: 14 }}>
-              👋 Guest mode • Sign up to save your scan history
+              <FaUserPlus size={13} /> Guest mode • Sign up to save your scan
+              history
             </span>
           )}
         </div>
@@ -459,7 +465,7 @@ const MessageScanner = () => {
           <div className="alert alert-danger">
             <FaExclamationCircle size={26} />
             <div style={{ flex: 1 }}>
-              <div className="alert-title">⚠️ Connection Error</div>
+              <div className="alert-title">Connection Error</div>
               <p>
                 {error ||
                   "Cannot connect to the server. Please check your connection."}
@@ -495,7 +501,8 @@ const MessageScanner = () => {
               <div className="risk-gauge">
                 <div className="risk-meta">
                   <span className="risk-label">
-                    {riskLevel.icon} {riskLevel.label}
+                    <riskLevel.Icon size={14} aria-hidden="true" />
+                    {riskLevel.label}
                   </span>
                   <h3>{result.prediction || result.classification}</h3>
                 </div>
@@ -504,7 +511,9 @@ const MessageScanner = () => {
               <div className="result-grid">
                 <div className="result-tile">
                   <div className="result-tile-head">
-                    <div className="result-tile-icon">🏷️</div>
+                    <div className="result-tile-icon">
+                      <FaTag />
+                    </div>
                     <div>
                       <h3>Classification</h3>
                       <p>AI-Powered Prediction</p>
@@ -527,7 +536,9 @@ const MessageScanner = () => {
 
                 <div className="result-tile">
                   <div className="result-tile-head">
-                    <div className="result-tile-icon">📋</div>
+                    <div className="result-tile-icon">
+                      <FaClipboardList />
+                    </div>
                     <div>
                       <h3>Analysis Details</h3>
                       <p>Key Scam Indicators</p>
@@ -569,7 +580,9 @@ const MessageScanner = () => {
             {result._raw?.messagePhishingReasons &&
               result._raw.messagePhishingReasons.length > 0 && (
                 <div className="reasons-card danger">
-                  <h4>🚨 Message Phishing Indicators</h4>
+                  <h4>
+                    <FaExclamationTriangle /> Message Phishing Indicators
+                  </h4>
                   <ul>
                     {result._raw.messagePhishingReasons.map((reason, index) => (
                       <li key={index}>{reason}</li>
@@ -613,7 +626,9 @@ const MessageScanner = () => {
             {/* Recommendation */}
             <div className="recommendation">
               <div className="rec-head">
-                <div className="rec-icon">🛡️</div>
+                <div className="rec-icon">
+                  <FaShieldAlt />
+                </div>
                 <div>
                   <h3>Security Recommendation</h3>
                   <p>What you should do next</p>
@@ -621,10 +636,10 @@ const MessageScanner = () => {
               </div>
               <p>
                 {result.riskScore > 70
-                  ? "🚫 DO NOT engage with this message. Block the sender immediately. Never click links, reply, or call any numbers provided. Report this as spam to your carrier."
+                  ? "DO NOT engage with this message. Block the sender immediately. Never click links, reply, or call any numbers provided. Report this as spam to your carrier."
                   : result.riskScore > 30
-                    ? "⚠️ Be cautious. Do not share personal information, click suspicious links, or call unknown numbers. Verify the sender through official channels."
-                    : "✓ This message appears safe. However, always verify unexpected requests, especially those asking for personal information or money transfers."}
+                    ? "Be cautious. Do not share personal information, click suspicious links, or call unknown numbers. Verify the sender through official channels."
+                    : "This message appears safe. However, always verify unexpected requests, especially those asking for personal information or money transfers."}
               </p>
             </div>
 
@@ -653,7 +668,11 @@ const MessageScanner = () => {
                       onClick={() => handleAccuracySelect(true)}
                     >
                       <FaThumbsUp /> Yes, accurate
-                      {feedback.isAccurate === true && <span>✓</span>}
+                      {feedback.isAccurate === true && (
+                        <span className="acc-check">
+                          <FaCheck size={11} />
+                        </span>
+                      )}
                     </button>
                     <button
                       type="button"
@@ -663,7 +682,11 @@ const MessageScanner = () => {
                       onClick={() => handleAccuracySelect(false)}
                     >
                       <FaThumbsDown /> No, inaccurate
-                      {feedback.isAccurate === false && <span>✓</span>}
+                      {feedback.isAccurate === false && (
+                        <span className="acc-check">
+                          <FaCheck size={11} />
+                        </span>
+                      )}
                     </button>
                   </div>
                   {accuracyError && (
@@ -675,7 +698,7 @@ const MessageScanner = () => {
                         marginTop: 8,
                       }}
                     >
-                      ❌ {accuracyError}
+                      <FaTimesCircle /> {accuracyError}
                     </p>
                   )}
                   {accuracySubmitted && feedback.isAccurate !== null && (
@@ -687,7 +710,8 @@ const MessageScanner = () => {
                         marginTop: 8,
                       }}
                     >
-                      ✓ Accuracy feedback submitted successfully
+                      <FaCheck size={11} /> Accuracy feedback submitted
+                      successfully
                     </p>
                   )}
                 </div>
@@ -741,8 +765,18 @@ const MessageScanner = () => {
                     className="result-box"
                     style={{ maxWidth: 480, margin: "12px auto 0" }}
                   >
-                    <p style={{ fontStyle: "italic", margin: 0 }}>
-                      💬 "{feedbackReply}"
+                    <p
+                      style={{
+                        fontStyle: "italic",
+                        margin: 0,
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "flex-start",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <FaCommentDots style={{ marginTop: 3 }} />{" "}
+                      <span>&ldquo;{feedbackReply}&rdquo;</span>
                     </p>
                   </div>
                 )}
