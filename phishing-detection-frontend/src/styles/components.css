@@ -315,7 +315,12 @@
 }
 .input.has-icon,
 .textarea.has-icon,
-.input-wrap .input { padding-left: 46px; }
+.input-wrap .input,
+.input-wrap .textarea,
+.search-wrap .input,
+.search-wrap .textarea {
+  padding-left: 46px;
+}
 
 .textarea {
   resize: vertical;
