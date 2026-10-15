@@ -103,11 +103,17 @@ export const GuestProvider = ({ children }) => {
 
   const getStats = () => {
     const total = scans.length;
-    const phishing = scans.filter(
-      (s) => s.result === "phishing" || s.result === "dangerous",
-    ).length;
+    const isMessage = (s) => s.type === "message";
+    const isThreat = (s) =>
+      s.result === "phishing" ||
+      s.result === "dangerous" ||
+      s.result === "malicious";
+    const phishing = scans.filter((s) => !isMessage(s) && isThreat(s)).length;
     const scam = scans.filter(
-      (s) => s.result === "scam" || s.result === "suspicious",
+      (s) =>
+        s.result === "scam" ||
+        s.result === "suspicious" ||
+        (isMessage(s) && isThreat(s)),
     ).length;
     const safe = scans.filter(
       (s) => s.result === "safe" || s.result === "clean",

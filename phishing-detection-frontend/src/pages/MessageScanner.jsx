@@ -93,9 +93,6 @@ const MessageScanner = () => {
       case "PHISHING":
       case "DANGEROUS":
       case "MALICIOUS":
-        riskScore = 85;
-        resultType = "phishing";
-        break;
       case "SCAM":
         riskScore = 85;
         resultType = "scam";
