@@ -19,7 +19,6 @@ import {
   FaCopy,
   FaThumbsUp,
   FaThumbsDown,
-  FaSpinner,
   FaUserPlus,
   FaExclamationCircle,
   FaWifi,
@@ -441,7 +440,7 @@ const MessageScanner = () => {
               >
                 {loading ? (
                   <>
-                    <FaSpinner className="spinning" /> Analyzing...
+                    <span className="spinner" aria-hidden="true" /> Analyzing...
                   </>
                 ) : (
                   <>
@@ -561,7 +560,7 @@ const MessageScanner = () => {
                 >
                   {downloading ? (
                     <>
-                      <FaSpinner className="spinning" /> Downloading...
+                      <span className="spinner" aria-hidden="true" /> Downloading...
                     </>
                   ) : !isAuthenticated ? (
                     <>
@@ -744,7 +743,7 @@ const MessageScanner = () => {
                   >
                     {submitting ? (
                       <>
-                        <FaSpinner className="spinning" /> Submitting Feedback...
+                        <span className="spinner" aria-hidden="true" /> Submitting Feedback...
                       </>
                     ) : (
                       "Submit Feedback"

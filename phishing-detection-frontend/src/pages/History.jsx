@@ -19,7 +19,6 @@ import {
   FaLink,
   FaEnvelope,
   FaTrashAlt,
-  FaSpinner,
   FaCalendarAlt,
   FaTimes,
   FaHashtag,
@@ -844,7 +843,7 @@ const History = () => {
                               }
                             >
                               {isDownloading ? (
-                                <FaSpinner className="spinning" size={14} />
+                                <span className="spinner spinner-sm" aria-hidden="true" />
                               ) : (
                                 <FaFilePdf size={14} />
                               )}
@@ -857,7 +856,7 @@ const History = () => {
                                 title="Delete scan"
                               >
                                 {isDeleting ? (
-                                  <FaSpinner className="spinning" size={14} />
+                                  <span className="spinner spinner-sm" aria-hidden="true" />
                                 ) : (
                                   <FaTrashAlt size={14} />
                                 )}
@@ -1197,7 +1196,7 @@ const History = () => {
                 >
                   {downloadingId === selectedScan.reference ? (
                     <>
-                      <FaSpinner className="spinning" /> Downloading...
+                      <span className="spinner" aria-hidden="true" /> Downloading...
                     </>
                   ) : (
                     <>

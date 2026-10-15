@@ -83,6 +83,12 @@
           transform: rotate(360deg);
         }
       }
+      @media (prefers-reduced-motion: reduce) {
+        .app-boot-spinner {
+          animation-duration: 1.6s !important;
+          animation-iteration-count: infinite !important;
+        }
+      }
     </style>
     <script type="module" src="/src/main.jsx"></script>
   </body>

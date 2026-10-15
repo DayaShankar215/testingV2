@@ -7,7 +7,6 @@ import {
   FaEnvelope,
   FaLock,
   FaSave,
-  FaSpinner,
   FaCheckCircle,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
@@ -161,7 +160,7 @@ const Profile = () => {
               >
                 {loading ? (
                   <>
-                    <FaSpinner className="spinning" />
+                    <span className="spinner" aria-hidden="true" />
                     <span>Saving...</span>
                   </>
                 ) : saved ? (
@@ -241,7 +240,7 @@ const Profile = () => {
               >
                 {passwordLoading ? (
                   <>
-                    <FaSpinner className="spinning" />
+                    <span className="spinner" aria-hidden="true" />
                     <span>Changing Password...</span>
                   </>
                 ) : (

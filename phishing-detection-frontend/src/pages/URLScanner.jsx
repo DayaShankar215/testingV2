@@ -19,7 +19,6 @@ import {
   FaCopy,
   FaThumbsUp,
   FaThumbsDown,
-  FaSpinner,
   FaUserPlus,
   FaExclamationCircle,
   FaWifi,
@@ -440,7 +439,7 @@ const URLScanner = () => {
               <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
                 {loading ? (
                   <>
-                    <FaSpinner className="spinning" /> Scanning...
+                    <span className="spinner" aria-hidden="true" /> Scanning...
                   </>
                 ) : (
                   <>
@@ -556,7 +555,7 @@ const URLScanner = () => {
                 >
                   {downloading ? (
                     <>
-                      <FaSpinner className="spinning" /> Downloading...
+                      <span className="spinner" aria-hidden="true" /> Downloading...
                     </>
                   ) : !isAuthenticated ? (
                     <>
@@ -706,7 +705,7 @@ const URLScanner = () => {
                   >
                     {submitting ? (
                       <>
-                        <FaSpinner className="spinning" /> Submitting Feedback...
+                        <span className="spinner" aria-hidden="true" /> Submitting Feedback...
                       </>
                     ) : (
                       "Submit Feedback"
