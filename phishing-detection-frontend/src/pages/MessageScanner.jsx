@@ -493,34 +493,11 @@ const MessageScanner = () => {
           >
             <div className="result-head">
               <div className="risk-gauge">
-                <div
-                  className="risk-score-ring"
-                  style={{
-                    "--pct": result.riskScore,
-                    "--risk-color": riskLevel.color,
-                  }}
-                >
-                  <span>{result.riskScore}</span>
-                </div>
                 <div className="risk-meta">
                   <span className="risk-label">
                     {riskLevel.icon} {riskLevel.label}
                   </span>
                   <h3>{result.prediction || result.classification}</h3>
-                  <div className="risk-bar">
-                    <div
-                      className="risk-bar-fill"
-                      style={{
-                        width: `${result.riskScore}%`,
-                        background: riskLevel.color,
-                      }}
-                    />
-                  </div>
-                  <div className="risk-scale">
-                    <span>0</span>
-                    <span>50</span>
-                    <span>100</span>
-                  </div>
                 </div>
               </div>
 
