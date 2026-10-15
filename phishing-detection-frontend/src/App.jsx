@@ -1,10 +1,11 @@
 // App.jsx
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { GuestProvider } from "./context/GuestContext";
+import { warmUpServer } from "./services/api";
 import Navbar from "./components/common/Navbar";
 import Footer from "./components/common/Footer";
 import ErrorBoundary from "./components/common/ErrorBoundary";
@@ -12,6 +13,7 @@ import ProtectedRoute from "./components/common/ProtectedRoute";
 import ScrollToTop from "./components/common/ScrollToTop";
 import BackToTop from "./components/common/BackToTop";
 import CommandPalette from "./components/common/CommandPalette";
+import GlobalLoadingBar from "./components/common/GlobalLoadingBar";
 import Dashboard from "./pages/Dashboard";
 import URLScanner from "./pages/URLScanner";
 import MessageScanner from "./pages/MessageScanner";
@@ -22,9 +24,14 @@ import NotFound from "./pages/NotFound";
 const AppContent = () => {
   const { currentTheme } = useTheme();
 
+  useEffect(() => {
+    warmUpServer();
+  }, []);
+
   return (
     <Router>
       <ScrollToTop />
+      <GlobalLoadingBar />
       <div className="app-shell">
         <Navbar />
         <main className="app-main">

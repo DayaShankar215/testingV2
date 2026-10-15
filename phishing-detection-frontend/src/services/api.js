@@ -1,8 +1,33 @@
 // services/api.js
 import axios from "axios";
+import { startLoading, stopLoading } from "./loadingTracker";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://secureshield-backend-1.onrender.com/";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://secureshield-backend-1.onrender.com"
+)
+  .trim()
+  .replace(/\/+$/, "");
+
+export { API_BASE_URL };
+
+const MAX_GET_RETRIES = 2;
+const RETRY_STATUSES = [502, 503, 504, 429];
+
+// Fire-and-forget ping to wake a cold backend (Render free tier) so the
+// first real request the user makes is fast.
+export const warmUpServer = () => {
+  try {
+    fetch(`${API_BASE_URL}/`, {
+      method: "GET",
+      headers: { "ngrok-skip-browser-warning": "true" },
+      cache: "no-store",
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // ignore
+  }
+};
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,12 +35,13 @@ const api = axios.create({
     "Content-Type": "application/json",
     "Accept": "application/json",
   },
-  timeout: 60000,
+  timeout: 20000,
 });
 
 // --- Request Interceptor ---
 api.interceptors.request.use(
   (config) => {
+    startLoading();
     config.headers["ngrok-skip-browser-warning"] = "true";
     const token = localStorage.getItem("accessToken");
     if (token) {
@@ -24,6 +50,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
+    stopLoading();
     return Promise.reject(error);
   }
 );
@@ -31,9 +58,28 @@ api.interceptors.request.use(
 // --- Response Interceptor ---
 api.interceptors.response.use(
   (response) => {
+    stopLoading();
     return response;
   },
-  (error) => {
+  async (error) => {
+    stopLoading();
+
+    const config = error.config || {};
+    const status = error.response?.status;
+    const method = (config.method || "get").toLowerCase();
+    const canRetry =
+      Boolean(config.url) &&
+      method === "get" &&
+      (!error.response || RETRY_STATUSES.includes(status)) &&
+      (config.__retryCount || 0) < MAX_GET_RETRIES;
+
+    if (canRetry) {
+      config.__retryCount = (config.__retryCount || 0) + 1;
+      const delay = 700 * config.__retryCount;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return api(config);
+    }
+
     if (error.code === "ERR_NETWORK") {
       throw { 
         message: "Cannot connect to server. Please check your connection.",
