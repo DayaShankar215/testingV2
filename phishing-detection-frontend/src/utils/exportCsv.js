@@ -1,4 +1,6 @@
 // utils/exportCsv.js
+import { getFeedbackState } from "./feedback";
+
 const escapeCell = (value) => {
   if (value === null || value === undefined) return "";
   const str = String(value).replace(/\r?\n|\r/g, " ").replace(/"/g, '""');
@@ -11,6 +13,7 @@ export const scansToCsv = (scans = []) => {
     "Type",
     "Content",
     "Prediction",
+    "Feedback",
     "Date",
   ];
 
@@ -19,6 +22,7 @@ export const scansToCsv = (scans = []) => {
     scan.type || "",
     scan.content || scan.url || scan.message || "",
     scan.prediction || scan.overallPrediction || "",
+    getFeedbackState(scan) === true ? "Provided" : "Not provided",
     scan.scannedAt || scan.date || scan.timestamp || "",
   ]);
 

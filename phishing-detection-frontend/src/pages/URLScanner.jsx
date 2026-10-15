@@ -29,6 +29,7 @@ import {
   FaCommentDots,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
+import { recordFeedback } from "../utils/feedback";
 
 const URLScanner = () => {
   const location = useLocation();
@@ -297,6 +298,7 @@ const URLScanner = () => {
 
       console.log("Accuracy Response:", response);
       setAccuracySubmitted(true);
+      recordFeedback(scanId, isAccurate);
 
       if (response?.reply) {
         toast.success(response.reply);
