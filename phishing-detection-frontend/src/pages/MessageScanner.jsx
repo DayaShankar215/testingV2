@@ -497,16 +497,6 @@ const MessageScanner = () => {
             style={{ "--risk-color": riskLevel.color }}
           >
             <div className="result-head">
-              <div className="risk-gauge">
-                <div className="risk-meta">
-                  <span className="risk-label">
-                    <riskLevel.Icon size={14} aria-hidden="true" />
-                    {riskLevel.label}
-                  </span>
-                  <h3>{result.prediction || result.classification}</h3>
-                </div>
-              </div>
-
               <div className="result-grid">
                 <div className="result-tile">
                   <div className="result-tile-head">
