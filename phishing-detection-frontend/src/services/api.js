@@ -4,7 +4,7 @@ import { startLoading, stopLoading } from "./loadingTracker";
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
-  "https://secureshield-backend-1.onrender.com"
+  "https://mud-cable-passerby.ngrok-free.dev"
 )
   .trim()
   .replace(/\/+$/, "");
